@@ -1,0 +1,56 @@
+{
+  "name": "@agentdemo/mcp-server-azure",
+  "version": "0.1.0",
+  "description": "Azure MCP Server sidecar for Agent Demo - provides Azure resource access via Model Context Protocol",
+  "main": "server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js",
+    "prod": "NODE_ENV=production node server.js",
+    "config:validate": "node config-loader.js dev",
+    "config:show:dev": "node config-loader.js dev",
+    "config:show:prod": "node config-loader.js prod",
+    "docker:build": "docker build -t agentdemo-mcp-server:latest .",
+    "docker:run:dev": "docker run --rm -it -p 3000:3000 -e AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID agentdemo-mcp-server:latest npm run dev",
+    "docker:run:prod": "docker run --rm -d -p 3000:3000 -e AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID agentdemo-mcp-server:latest npm run prod",
+    "test": "node --test tests/**/*.test.js",
+    "test:watch": "node --test --watch tests/**/*.test.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "health": "curl -s http://localhost:3000/health | jq",
+    "tools:list": "curl -s http://localhost:3000/tools | jq"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "azure",
+    "agents",
+    "llm"
+  ],
+  "author": "Agent Demo Team",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/identity": "^4.0.0",
+    "@azure/arm-resources": "^14.0.0",
+    "@azure/arm-appservice": "^14.0.0",
+    "@azure/arm-compute": "^21.0.0",
+    "@azure/arm-containerinstances": "^10.0.0",
+    "@azure/arm-cosmosdb": "^15.0.0",
+    "@azure/arm-storage": "^18.0.0",
+    "@azure/arm-keyvault": "^13.0.0",
+    "@azure/monitor-query": "^4.0.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "pino": "^8.16.2",
+    "ajv": "^8.12.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.51.0",
+    "prettier": "^3.0.3",
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,222 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Azure MCP Server Configuration",
+  "description": "Configuration for Azure MCP Server with managed identity authentication",
+  "type": "object",
+  "properties": {
+    "server": {
+      "type": "object",
+      "description": "Server configuration",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "description": "Server port",
+          "default": 3000
+        },
+        "host": {
+          "type": "string",
+          "description": "Server host address",
+          "default": "0.0.0.0"
+        },
+        "protocol": {
+          "type": "string",
+          "description": "Protocol (stdio or http)",
+          "enum": ["stdio", "http"],
+          "default": "http"
+        }
+      },
+      "required": ["port", "host", "protocol"]
+    },
+    "authentication": {
+      "type": "object",
+      "description": "Authentication configuration",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Authentication type (managedIdentity, servicePrincipal, or azureCliCredential)",
+          "enum": ["managedIdentity", "servicePrincipal", "azureCliCredential"],
+          "default": "managedIdentity"
+        },
+        "managedIdentity": {
+          "type": "object",
+          "description": "Managed Identity configuration (used when type=managedIdentity)",
+          "properties": {
+            "clientId": {
+              "type": "string",
+              "description": "User-assigned managed identity client ID (optional, uses system identity if not provided)"
+            }
+          }
+        },
+        "servicePrincipal": {
+          "type": "object",
+          "description": "Service Principal configuration (used when type=servicePrincipal)",
+          "properties": {
+            "clientId": {
+              "type": "string",
+              "description": "Service principal client ID"
+            },
+            "clientSecret": {
+              "type": "string",
+              "description": "Service principal client secret (from environment variable preferred)"
+            },
+            "tenantId": {
+              "type": "string",
+              "description": "Azure tenant ID"
+            }
+          },
+          "required": ["clientId", "tenantId"]
+        },
+        "azureCliCredential": {
+          "type": "object",
+          "description": "Azure CLI credential configuration (for local development)",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable Azure CLI credential fallback for local development",
+              "default": true
+            }
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    "azure": {
+      "type": "object",
+      "description": "Azure resource configuration",
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "description": "Azure subscription ID",
+          "format": "uuid"
+        },
+        "resourceScope": {
+          "type": "string",
+          "description": "Resource scope (subscription, resourceGroup, or resource). Determines what resources are accessible.",
+          "enum": ["subscription", "resourceGroup", "resource"],
+          "default": "subscription"
+        },
+        "resourceGroup": {
+          "type": "string",
+          "description": "Resource group name (required if resourceScope is resourceGroup)"
+        },
+        "environment": {
+          "type": "string",
+          "description": "Azure cloud environment (AzureCloud, AzureGov, AzureChinaCloud, etc.)",
+          "enum": ["AzureCloud", "AzureGov", "AzureChinaCloud", "AzureStackCloud"],
+          "default": "AzureCloud"
+        }
+      },
+      "required": ["subscriptionId"]
+    },
+    "tools": {
+      "type": "object",
+      "description": "Enabled tools configuration",
+      "properties": {
+        "resources": {
+          "type": "boolean",
+          "description": "Enable Azure resource listing and queries",
+          "default": true
+        },
+        "resourceGroups": {
+          "type": "boolean",
+          "description": "Enable resource group operations",
+          "default": true
+        },
+        "appServices": {
+          "type": "boolean",
+          "description": "Enable App Service operations",
+          "default": true
+        },
+        "containerInstances": {
+          "type": "boolean",
+          "description": "Enable Container Instances operations",
+          "default": true
+        },
+        "virtualMachines": {
+          "type": "boolean",
+          "description": "Enable Virtual Machines operations",
+          "default": true
+        },
+        "cosmos": {
+          "type": "boolean",
+          "description": "Enable Cosmos DB operations",
+          "default": true
+        },
+        "storage": {
+          "type": "boolean",
+          "description": "Enable Storage Account operations",
+          "default": true
+        },
+        "keyVault": {
+          "type": "boolean",
+          "description": "Enable Key Vault operations (secrets listing only, not retrieval)",
+          "default": true
+        },
+        "monitoring": {
+          "type": "boolean",
+          "description": "Enable monitoring and logging queries",
+          "default": true
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "description": "Log level",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info"
+        },
+        "format": {
+          "type": "string",
+          "description": "Log format (json or text)",
+          "enum": ["json", "text"],
+          "default": "json"
+        }
+      }
+    },
+    "caching": {
+      "type": "object",
+      "description": "Caching configuration for Azure API calls",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable response caching",
+          "default": true
+        },
+        "ttlSeconds": {
+          "type": "integer",
+          "description": "Cache TTL in seconds",
+          "default": 300,
+          "minimum": 0
+        }
+      }
+    },
+    "rateLimit": {
+      "type": "object",
+      "description": "Rate limiting configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable rate limiting",
+          "default": true
+        },
+        "requestsPerSecond": {
+          "type": "integer",
+          "description": "Maximum requests per second",
+          "default": 10,
+          "minimum": 1
+        },
+        "burstSize": {
+          "type": "integer",
+          "description": "Burst request limit",
+          "default": 20,
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "required": ["server", "authentication", "azure"]
+}

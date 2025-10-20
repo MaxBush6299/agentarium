@@ -1,0 +1,42 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "protocol": "http"
+  },
+  "authentication": {
+    "type": "azureCliCredential",
+    "azureCliCredential": {
+      "enabled": true
+    }
+  },
+  "azure": {
+    "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
+    "resourceScope": "subscription",
+    "environment": "AzureCloud"
+  },
+  "tools": {
+    "resources": true,
+    "resourceGroups": true,
+    "appServices": true,
+    "containerInstances": true,
+    "virtualMachines": true,
+    "cosmos": true,
+    "storage": true,
+    "keyVault": true,
+    "monitoring": true
+  },
+  "logging": {
+    "level": "debug",
+    "format": "json"
+  },
+  "caching": {
+    "enabled": true,
+    "ttlSeconds": 300
+  },
+  "rateLimit": {
+    "enabled": true,
+    "requestsPerSecond": 10,
+    "burstSize": 20
+  }
+}

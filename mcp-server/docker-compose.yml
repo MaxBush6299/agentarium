@@ -1,0 +1,57 @@
+version: '3.9'
+
+services:
+  # Azure MCP Server (development with Azure CLI credentials)
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentdemo-mcp-server
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID}
+    volumes:
+      # Mount Azure credentials for local development
+      - ~/.azure:/home/appuser/.azure:ro
+      - ~/.config/azure:/home/appuser/.config/azure:ro
+    networks:
+      - agentdemo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # Backend API (optional - for integration testing)
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: agentdemo-backend
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: development
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID}
+      LOCAL_DEV_MODE: "true"
+    networks:
+      - agentdemo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - with-backend
+
+networks:
+  agentdemo:
+    driver: bridge
