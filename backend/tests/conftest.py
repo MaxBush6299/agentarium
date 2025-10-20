@@ -2,8 +2,15 @@
 Pytest configuration and shared fixtures for backend tests.
 """
 import os
+import sys
 import pytest
 from typing import AsyncGenerator
+from pathlib import Path
+
+# Add src directory to path for all tests
+src_path = Path(__file__).parent.parent / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
 
 @pytest.fixture(scope="session")

@@ -1,0 +1,436 @@
+openapi: 3.0.3
+info:
+  title: Ops Assistant API
+  description: |
+    API for managing Azure deployments and operations.
+    This is a mock API for demonstration purposes in the AI Agents Demo.
+  version: 1.0.0
+  contact:
+    name: AI Agents Demo Team
+    email: ops@example.com
+
+servers:
+  - url: https://api.example.com/ops
+    description: Production server
+  - url: http://localhost:8000/ops
+    description: Local development server
+
+tags:
+  - name: deployments
+    description: Deployment operations
+  - name: health
+    description: Health and status checks
+
+paths:
+  /deployments/status:
+    get:
+      summary: Get deployment status
+      description: Get the current status of deployments in specified environment
+      operationId: getDeploymentStatus
+      tags:
+        - deployments
+      parameters:
+        - name: environment
+          in: query
+          description: Environment name
+          required: false
+          schema:
+            type: string
+            enum: [dev, staging, production]
+            default: production
+        - name: service
+          in: query
+          description: Filter by service name
+          required: false
+          schema:
+            type: string
+            example: "backend-api"
+      responses:
+        '200':
+          description: Deployment status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  environment:
+                    type: string
+                    example: "production"
+                  last_updated:
+                    type: string
+                    format: date-time
+                    example: "2025-10-20T14:30:00Z"
+                  deployments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'
+              examples:
+                production-status:
+                  summary: Production deployment status
+                  value:
+                    environment: "production"
+                    last_updated: "2025-10-20T14:30:00Z"
+                    deployments:
+                      - service: "backend-api"
+                        version: "v2.5.1"
+                        status: "healthy"
+                        deployed_at: "2025-10-18T10:15:00Z"
+                        replicas: 3
+                        health_check_url: "https://api.example.com/health"
+                        last_health_check: "2025-10-20T14:29:45Z"
+                      - service: "frontend-app"
+                        version: "v1.8.3"
+                        status: "healthy"
+                        deployed_at: "2025-10-19T08:22:00Z"
+                        replicas: 2
+                        health_check_url: "https://app.example.com/health"
+                        last_health_check: "2025-10-20T14:29:50Z"
+                      - service: "mcp-server"
+                        version: "v1.2.0"
+                        status: "degraded"
+                        deployed_at: "2025-10-15T16:45:00Z"
+                        replicas: 1
+                        health_check_url: "http://mcp.internal/health"
+                        last_health_check: "2025-10-20T14:29:30Z"
+                        issues:
+                          - "High memory usage (85%)"
+                          - "Response time above threshold"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /deployments/history:
+    get:
+      summary: Get deployment history
+      description: Get the deployment history for a service
+      operationId: getDeploymentHistory
+      tags:
+        - deployments
+      parameters:
+        - name: service
+          in: query
+          description: Service name
+          required: true
+          schema:
+            type: string
+            example: "backend-api"
+        - name: limit
+          in: query
+          description: Maximum number of records
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Deployment history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  total:
+                    type: integer
+                  deployments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeploymentHistory'
+              examples:
+                backend-history:
+                  summary: Backend API deployment history
+                  value:
+                    service: "backend-api"
+                    total: 15
+                    deployments:
+                      - version: "v2.5.1"
+                        deployed_at: "2025-10-18T10:15:00Z"
+                        deployed_by: "ci-cd-pipeline"
+                        status: "success"
+                        duration_seconds: 180
+                        environment: "production"
+                      - version: "v2.5.0"
+                        deployed_at: "2025-10-15T14:20:00Z"
+                        deployed_by: "ci-cd-pipeline"
+                        status: "success"
+                        duration_seconds: 165
+                        environment: "production"
+                      - version: "v2.4.9"
+                        deployed_at: "2025-10-12T09:30:00Z"
+                        deployed_by: "manual-deploy"
+                        status: "rolled-back"
+                        duration_seconds: 145
+                        environment: "production"
+                        rollback_reason: "High error rate detected"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /deployments/rollback:
+    post:
+      summary: Rollback deployment
+      description: Rollback a service to a previous version
+      operationId: rollbackDeployment
+      tags:
+        - deployments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - service
+                - version
+                - environment
+              properties:
+                service:
+                  type: string
+                  example: "backend-api"
+                version:
+                  type: string
+                  example: "v2.4.8"
+                environment:
+                  type: string
+                  enum: [dev, staging, production]
+                  example: "production"
+                reason:
+                  type: string
+                  example: "Critical bug in v2.5.1"
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rollback_id:
+                    type: string
+                    example: "ROLLBACK-78901"
+                  service:
+                    type: string
+                  from_version:
+                    type: string
+                  to_version:
+                    type: string
+                  status:
+                    type: string
+                    example: "in-progress"
+                  initiated_at:
+                    type: string
+                    format: date-time
+                  estimated_duration_seconds:
+                    type: integer
+                    example: 120
+              examples:
+                rollback-initiated:
+                  summary: Rollback successfully initiated
+                  value:
+                    rollback_id: "ROLLBACK-78901"
+                    service: "backend-api"
+                    from_version: "v2.5.1"
+                    to_version: "v2.4.8"
+                    status: "in-progress"
+                    initiated_at: "2025-10-20T14:35:00Z"
+                    estimated_duration_seconds: 120
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Service or version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /deployments/{rollbackId}:
+    get:
+      summary: Get rollback status
+      description: Get the status of a rollback operation
+      operationId: getRollbackStatus
+      tags:
+        - deployments
+      parameters:
+        - name: rollbackId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "ROLLBACK-78901"
+      responses:
+        '200':
+          description: Rollback status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rollback_id:
+                    type: string
+                  service:
+                    type: string
+                  from_version:
+                    type: string
+                  to_version:
+                    type: string
+                  status:
+                    type: string
+                    enum: [in-progress, completed, failed]
+                  initiated_at:
+                    type: string
+                    format: date-time
+                  completed_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  duration_seconds:
+                    type: integer
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
+              examples:
+                completed-rollback:
+                  summary: Completed rollback
+                  value:
+                    rollback_id: "ROLLBACK-78901"
+                    service: "backend-api"
+                    from_version: "v2.5.1"
+                    to_version: "v2.4.8"
+                    status: "completed"
+                    initiated_at: "2025-10-20T14:35:00Z"
+                    completed_at: "2025-10-20T14:37:15Z"
+                    duration_seconds: 135
+        '404':
+          description: Rollback not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Deployment:
+      type: object
+      required:
+        - service
+        - version
+        - status
+        - deployed_at
+        - replicas
+      properties:
+        service:
+          type: string
+          example: "backend-api"
+        version:
+          type: string
+          example: "v2.5.1"
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, deploying]
+          example: "healthy"
+        deployed_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T10:15:00Z"
+        replicas:
+          type: integer
+          minimum: 0
+          example: 3
+        health_check_url:
+          type: string
+          format: uri
+          example: "https://api.example.com/health"
+        last_health_check:
+          type: string
+          format: date-time
+          example: "2025-10-20T14:29:45Z"
+        issues:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    DeploymentHistory:
+      type: object
+      required:
+        - version
+        - deployed_at
+        - status
+        - environment
+      properties:
+        version:
+          type: string
+          example: "v2.5.1"
+        deployed_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T10:15:00Z"
+        deployed_by:
+          type: string
+          example: "ci-cd-pipeline"
+        status:
+          type: string
+          enum: [success, failed, rolled-back]
+          example: "success"
+        duration_seconds:
+          type: integer
+          example: 180
+        environment:
+          type: string
+          enum: [dev, staging, production]
+          example: "production"
+        rollback_reason:
+          type: string
+          nullable: true
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "BadRequest"
+        message:
+          type: string
+          example: "Invalid parameter"
+        details:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+security:
+  - ApiKeyAuth: []

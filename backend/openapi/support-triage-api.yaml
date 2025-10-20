@@ -1,0 +1,455 @@
+openapi: 3.0.3
+info:
+  title: Support Triage API
+  description: |
+    API for searching support tickets and knowledge base articles.
+    This is a mock API for demonstration purposes in the AI Agents Demo.
+  version: 1.0.0
+  contact:
+    name: AI Agents Demo Team
+    email: support@example.com
+
+servers:
+  - url: https://api.example.com/support
+    description: Production server
+  - url: http://localhost:8000/support
+    description: Local development server
+
+tags:
+  - name: tickets
+    description: Support ticket operations
+  - name: knowledge-base
+    description: Knowledge base search
+
+paths:
+  /tickets/search:
+    get:
+      summary: Search support tickets
+      description: Search for support tickets by keyword, status, priority, or product
+      operationId: searchTickets
+      tags:
+        - tickets
+      parameters:
+        - name: query
+          in: query
+          description: Search query (searches title, description, and tags)
+          required: false
+          schema:
+            type: string
+            example: "Azure Storage connection error"
+        - name: status
+          in: query
+          description: Filter by ticket status
+          required: false
+          schema:
+            type: string
+            enum: [open, in-progress, resolved, closed]
+            example: "open"
+        - name: priority
+          in: query
+          description: Filter by priority level
+          required: false
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+            example: "high"
+        - name: product
+          in: query
+          description: Filter by product name
+          required: false
+          schema:
+            type: string
+            example: "Azure Storage"
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of matching tickets
+                    example: 42
+                  tickets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Ticket'
+              examples:
+                storage-connection-error:
+                  summary: Azure Storage connection errors
+                  value:
+                    total: 3
+                    tickets:
+                      - id: "TICKET-12345"
+                        title: "Azure Storage connection timeout"
+                        description: "Getting connection timeout errors when trying to access blob storage"
+                        status: "in-progress"
+                        priority: "high"
+                        product: "Azure Storage"
+                        created_at: "2025-10-15T10:30:00Z"
+                        updated_at: "2025-10-18T14:22:00Z"
+                        tags: ["connection", "timeout", "blob-storage"]
+                      - id: "TICKET-12289"
+                        title: "Unable to connect to storage account"
+                        description: "403 Forbidden error when accessing storage account from container app"
+                        status: "resolved"
+                        priority: "high"
+                        product: "Azure Storage"
+                        created_at: "2025-10-12T08:15:00Z"
+                        updated_at: "2025-10-14T16:45:00Z"
+                        tags: ["connection", "403", "authentication"]
+                      - id: "TICKET-12156"
+                        title: "Storage connection string not working"
+                        description: "Connection string works locally but fails in production"
+                        status: "closed"
+                        priority: "medium"
+                        product: "Azure Storage"
+                        created_at: "2025-10-08T13:20:00Z"
+                        updated_at: "2025-10-10T09:30:00Z"
+                        tags: ["connection-string", "environment"]
+        '400':
+          description: Bad request (invalid parameters)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized (missing or invalid API key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tickets/{ticketId}:
+    get:
+      summary: Get ticket by ID
+      description: Retrieve detailed information about a specific support ticket
+      operationId: getTicketById
+      tags:
+        - tickets
+      parameters:
+        - name: ticketId
+          in: path
+          description: Unique ticket identifier
+          required: true
+          schema:
+            type: string
+            example: "TICKET-12345"
+      responses:
+        '200':
+          description: Ticket found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketDetail'
+              examples:
+                ticket-with-resolution:
+                  summary: Resolved ticket with solution
+                  value:
+                    id: "TICKET-12289"
+                    title: "Unable to connect to storage account"
+                    description: "403 Forbidden error when accessing storage account from container app"
+                    status: "resolved"
+                    priority: "high"
+                    product: "Azure Storage"
+                    created_at: "2025-10-12T08:15:00Z"
+                    updated_at: "2025-10-14T16:45:00Z"
+                    resolved_at: "2025-10-14T16:45:00Z"
+                    tags: ["connection", "403", "authentication"]
+                    assigned_to: "support-engineer@example.com"
+                    resolution: "Issue was caused by missing RBAC role assignment. Added 'Storage Blob Data Contributor' role to the container app's managed identity and connection now works."
+                    related_kb_articles: ["KB-0042", "KB-0156"]
+                    comments:
+                      - author: "customer@example.com"
+                        timestamp: "2025-10-12T08:15:00Z"
+                        text: "We're getting 403 errors in production but not in dev environment"
+                      - author: "support-engineer@example.com"
+                        timestamp: "2025-10-12T10:30:00Z"
+                        text: "Checking RBAC permissions on the storage account"
+                      - author: "support-engineer@example.com"
+                        timestamp: "2025-10-14T16:45:00Z"
+                        text: "Added missing role assignment. Please verify the fix."
+        '404':
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /kb/search:
+    get:
+      summary: Search knowledge base
+      description: Search knowledge base articles for solutions and troubleshooting guides
+      operationId: searchKnowledgeBase
+      tags:
+        - knowledge-base
+      parameters:
+        - name: query
+          in: query
+          description: Search query
+          required: true
+          schema:
+            type: string
+            example: "Azure AD authentication"
+        - name: category
+          in: query
+          description: Filter by article category
+          required: false
+          schema:
+            type: string
+            example: "troubleshooting"
+        - name: product
+          in: query
+          description: Filter by product
+          required: false
+          schema:
+            type: string
+            example: "Azure Active Directory"
+        - name: limit
+          in: query
+          description: Maximum number of results
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  articles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KBArticle'
+              examples:
+                auth-troubleshooting:
+                  summary: Authentication troubleshooting articles
+                  value:
+                    total: 2
+                    articles:
+                      - id: "KB-0042"
+                        title: "Troubleshooting Azure Storage authentication errors"
+                        summary: "Common causes and solutions for 403 Forbidden errors when accessing Azure Storage"
+                        category: "troubleshooting"
+                        product: "Azure Storage"
+                        url: "https://support.example.com/kb/KB-0042"
+                        created_at: "2025-01-15T00:00:00Z"
+                        updated_at: "2025-09-20T00:00:00Z"
+                        views: 15234
+                        helpful_count: 1402
+                      - id: "KB-0156"
+                        title: "Configuring managed identity for Azure Storage access"
+                        summary: "Step-by-step guide for setting up managed identity authentication"
+                        category: "how-to"
+                        product: "Azure Storage"
+                        url: "https://support.example.com/kb/KB-0156"
+                        created_at: "2025-03-10T00:00:00Z"
+                        updated_at: "2025-10-01T00:00:00Z"
+                        views: 8932
+                        helpful_count: 756
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Ticket:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - priority
+        - product
+        - created_at
+      properties:
+        id:
+          type: string
+          description: Unique ticket identifier
+          example: "TICKET-12345"
+        title:
+          type: string
+          description: Ticket title
+          example: "Azure Storage connection timeout"
+        description:
+          type: string
+          description: Detailed description of the issue
+          example: "Getting connection timeout errors when trying to access blob storage"
+        status:
+          type: string
+          enum: [open, in-progress, resolved, closed]
+          example: "in-progress"
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+          example: "high"
+        product:
+          type: string
+          description: Product or service name
+          example: "Azure Storage"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T14:22:00Z"
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["connection", "timeout", "blob-storage"]
+
+    TicketDetail:
+      allOf:
+        - $ref: '#/components/schemas/Ticket'
+        - type: object
+          properties:
+            resolved_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2025-10-14T16:45:00Z"
+            assigned_to:
+              type: string
+              nullable: true
+              example: "support-engineer@example.com"
+            resolution:
+              type: string
+              nullable: true
+              description: Resolution details if ticket is resolved
+            related_kb_articles:
+              type: array
+              items:
+                type: string
+              description: IDs of related knowledge base articles
+            comments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Comment'
+
+    Comment:
+      type: object
+      required:
+        - author
+        - timestamp
+        - text
+      properties:
+        author:
+          type: string
+          example: "customer@example.com"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-10-12T08:15:00Z"
+        text:
+          type: string
+          example: "We're getting 403 errors in production but not in dev environment"
+
+    KBArticle:
+      type: object
+      required:
+        - id
+        - title
+        - summary
+        - category
+        - product
+        - url
+      properties:
+        id:
+          type: string
+          example: "KB-0042"
+        title:
+          type: string
+          example: "Troubleshooting Azure Storage authentication errors"
+        summary:
+          type: string
+          example: "Common causes and solutions for 403 Forbidden errors"
+        category:
+          type: string
+          example: "troubleshooting"
+        product:
+          type: string
+          example: "Azure Storage"
+        url:
+          type: string
+          format: uri
+          example: "https://support.example.com/kb/KB-0042"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        views:
+          type: integer
+          example: 15234
+        helpful_count:
+          type: integer
+          example: 1402
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "BadRequest"
+        message:
+          type: string
+          example: "Invalid query parameter"
+        details:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+security:
+  - ApiKeyAuth: []
