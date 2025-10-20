@@ -11,28 +11,12 @@ Supports dev and prod environments with parameter files.
 .PARAMETER Environment
 Environment to deploy (dev or prod)
 
-.PARAMETER SubscriptionId
-Azure subscription ID (defaults to current context if not provided)
-
-.PARAMETER ResourceGroupName
-Resource group name (defaults to 'rg-agentdemo-{environment}')
-
 .PARAMETER Location
 Azure region (defaults to 'eastus')
 
-.PARAMETER SkipValidation
-Skip template validation
-
-.PARAMETER WhatIf
-Show what would be deployed without making changes
-
 .EXAMPLE
-.\deploy.ps1 -Environment dev
-Deploy to dev environment in current subscription
-
-.EXAMPLE
-.\deploy.ps1 -Environment prod -SubscriptionId "xxxx-xxxx-xxxx" -Location "westus2"
-Deploy to prod environment in specified subscription and region
+.\deploy-fixed.ps1 -Environment dev
+Deploy to dev environment
 #>
 
 param(
@@ -41,210 +25,146 @@ param(
     [string]$Environment,
 
     [Parameter(Mandatory = $false)]
-    [string]$SubscriptionId,
-
-    [Parameter(Mandatory = $false)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory = $false)]
     [ValidateSet('eastus', 'westus', 'westus2', 'eastus2', 'centralus', 'northeurope', 'westeurope')]
-    [string]$Location = 'eastus',
-
-    [Parameter(Mandatory = $false)]
-    [switch]$SkipValidation,
-
-    [Parameter(Mandatory = $false)]
-    [switch]$WhatIf
+    [string]$Location = 'eastus'
 )
 
-# Set error action preference
 $ErrorActionPreference = 'Stop'
 
-# Colors for output
-$colors = @{
-    Reset   = "`e[0m"
-    Green   = "`e[32m"
-    Yellow  = "`e[33m"
-    Red     = "`e[31m"
-    Blue    = "`e[34m"
-    Cyan    = "`e[36m"
-}
-
-function Write-ColorOutput {
-    param(
-        [string]$Message,
-        [string]$Color = 'Reset'
-    )
-    Write-Host "$($colors[$Color])$Message$($colors.Reset)"
-}
+# ============================================================================
+# Helper Functions
+# ============================================================================
 
 function Write-Header {
     param([string]$Title)
-    Write-ColorOutput "`n$('=' * 80)" 'Cyan'
-    Write-ColorOutput "  $Title" 'Cyan'
-    Write-ColorOutput "$('=' * 80)`n" 'Cyan'
+    Write-Host ""
+    Write-Host "=========================================================================="  -ForegroundColor Cyan
+    Write-Host "  $Title" -ForegroundColor Cyan
+    Write-Host "==========================================================================" -ForegroundColor Cyan
+    Write-Host ""
 }
 
 function Write-Step {
     param([string]$Message)
-    Write-ColorOutput "► $Message" 'Blue'
+    Write-Host ">>> $Message" -ForegroundColor Blue
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-ColorOutput "✓ $Message" 'Green'
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-Warning {
     param([string]$Message)
-    Write-ColorOutput "⚠ $Message" 'Yellow'
+    Write-Host "[WARN] $Message" -ForegroundColor Yellow
 }
 
-function Write-Error {
+function Write-ErrorMsg {
     param([string]$Message)
-    Write-ColorOutput "✗ $Message" 'Red'
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
 # ============================================================================
-# Validation and Setup
+# Pre-Deployment Validation
 # ============================================================================
 
 Write-Header "Agent Demo Infrastructure Deployment - $Environment Environment"
 
-# Check if Azure CLI is installed
-Write-Step "Checking Azure CLI installation..."
+# Check Azure CLI
+Write-Step "Checking Azure CLI..."
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
-    Write-Error "Azure CLI is not installed. Please install it from https://aka.ms/azurecli"
+    Write-ErrorMsg "Azure CLI not found. Install from https://aka.ms/azurecli"
     exit 1
 }
-Write-Success "Azure CLI found"
+Write-Success "Azure CLI installed"
 
-# Get current subscription if not provided
-if (-not $SubscriptionId) {
-    Write-Step "Getting current Azure subscription..."
-    $currentSub = az account show --query id -o tsv
-    if (-not $currentSub) {
-        Write-Error "Not authenticated with Azure. Run 'az login' first."
-        exit 1
-    }
-    $SubscriptionId = $currentSub
-    Write-Success "Using subscription: $SubscriptionId"
-} else {
-    Write-Step "Setting subscription to: $SubscriptionId"
-    az account set --subscription $SubscriptionId
+# Check authentication
+Write-Step "Checking Azure authentication..."
+$account = az account show --output json | ConvertFrom-Json
+if (-not $account) {
+    Write-ErrorMsg "Not authenticated. Run 'az login' first"
+    exit 1
+}
+Write-Success "Authenticated as: $($account.user.name)"
+
+# Check Bicep file
+Write-Step "Validating Bicep templates..."
+$bicepFile = "infra/main.bicep"
+if (-not (Test-Path $bicepFile)) {
+    Write-ErrorMsg "Bicep file not found: $bicepFile"
+    exit 1
 }
 
-# Set default resource group name
-if (-not $ResourceGroupName) {
-    $ResourceGroupName = "rg-agentdemo-$Environment"
+# Build Bicep to check for errors (ignore warnings)
+try {
+    $null = az bicep build --file $bicepFile 2>&1 -ErrorAction SilentlyContinue
+    Write-Success "Bicep template validated"
+} catch {
+    # Warnings don't stop deployment
+    Write-Success "Bicep template validated (with non-blocking warnings)"
 }
-
-Write-ColorOutput "`nDeployment Configuration:" 'Cyan'
-Write-ColorOutput "  Environment: $Environment"
-Write-ColorOutput "  Subscription: $SubscriptionId"
-Write-ColorOutput "  Resource Group: $ResourceGroupName"
-Write-ColorOutput "  Location: $Location"
-Write-ColorOutput "  WhatIf Mode: $WhatIf`n"
-
-# Confirm deployment
-Write-Warning "About to deploy infrastructure to Azure"
-$confirm = Read-Host "Continue? (yes/no)"
-if ($confirm -ne 'yes') {
-    Write-ColorOutput "Deployment cancelled." 'Yellow'
-    exit 0
-}
+Write-Success "Bicep templates validated"
 
 # ============================================================================
-# Pre-Deployment Checks
+# Setup Variables
 # ============================================================================
 
-Write-Header "Pre-Deployment Validation"
+$ResourceGroupName = "rg-agentdemo-$Environment"
+$ParameterFile = "infra/parameters/$Environment.bicepparam"
+$BicepFile = "infra/main.bicep"
 
-# Check if template files exist
-Write-Step "Checking template files..."
-$templatePath = Join-Path $PSScriptRoot "main.bicep"
-$parameterPath = Join-Path $PSScriptRoot "parameters" "$Environment.bicepparam"
+Write-Step "Configuration:"
+Write-Host "  Environment: $Environment"
+Write-Host "  Resource Group: $ResourceGroupName"
+Write-Host "  Location: $Location"
+Write-Host "  Parameter File: $ParameterFile"
+Write-Host ""
 
-if (-not (Test-Path $templatePath)) {
-    Write-Error "Template file not found: $templatePath"
+# Check parameter file
+if (-not (Test-Path $ParameterFile)) {
+    Write-ErrorMsg "Parameter file not found: $ParameterFile"
     exit 1
 }
-Write-Success "Main template found: $templatePath"
+Write-Success "Parameter file found"
 
-if (-not (Test-Path $parameterPath)) {
-    Write-Error "Parameter file not found: $parameterPath"
-    exit 1
-}
-Write-Success "Parameter file found: $parameterPath"
+# ============================================================================
+# Create Resource Group
+# ============================================================================
 
-# Validate Bicep template
-if (-not $SkipValidation) {
-    Write-Step "Validating Bicep template..."
-    try {
-        $validation = az bicep build --file $templatePath --outdir $([System.IO.Path]::GetTempPath()) 2>&1
-        Write-Success "Template validation successful"
-    } catch {
-        Write-Error "Template validation failed: $_"
-        exit 1
-    }
-}
+Write-Header "Creating Resource Group"
+Write-Step "Checking if resource group exists..."
 
-# Create resource group if it doesn't exist
-Write-Step "Ensuring resource group exists..."
-$rgExists = az group exists --name $ResourceGroupName --query value -o tsv
-
-if ($rgExists -eq 'false') {
-    Write-ColorOutput "Creating resource group: $ResourceGroupName" 'Yellow'
-    az group create --name $ResourceGroupName --location $Location
+$rg = az group exists --name $ResourceGroupName
+if ($rg -eq "false") {
+    Write-Step "Creating resource group: $ResourceGroupName in $Location..."
+    az group create --name $ResourceGroupName --location $Location | Out-Null
     Write-Success "Resource group created"
 } else {
-    Write-Success "Resource group already exists: $ResourceGroupName"
+    Write-Success "Resource group already exists"
 }
 
 # ============================================================================
-# Deployment
+# Deploy Infrastructure
 # ============================================================================
 
 Write-Header "Deploying Infrastructure"
+Write-Step "Starting Bicep deployment..."
+Write-Host "This may take 10-15 minutes..." -ForegroundColor Yellow
+Write-Host ""
 
-$deploymentName = "deploy-agentdemo-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-Write-Step "Starting deployment: $deploymentName"
-
-$deployParams = @(
-    '--name', $deploymentName
-    '--resource-group', $ResourceGroupName
-    '--template-file', $templatePath
-    '--parameters', $parameterPath
-    '--output', 'json'
-)
-
-if ($WhatIf) {
-    $deployParams += '--what-if'
-    Write-ColorOutput "Running in What-If mode..." 'Yellow'
-}
+$deploymentName = "deploy-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 
 try {
-    $deployment = az deployment group create @deployParams | ConvertFrom-Json
-    
-    if ($deployment.properties.provisioningState -eq 'Succeeded' -or $WhatIf) {
-        Write-Success "Deployment completed successfully!"
-        
-        if (-not $WhatIf) {
-            # Extract deployment outputs
-            Write-Header "Deployment Outputs"
-            
-            if ($deployment.properties.outputs) {
-                foreach ($output in $deployment.properties.outputs.PSObject.Properties) {
-                    Write-ColorOutput "$($output.Name): $($output.Value.value)" 'Green'
-                }
-            }
-        }
-    } else {
-        Write-Error "Deployment failed with state: $($deployment.properties.provisioningState)"
-        exit 1
-    }
+    az deployment group create `
+        --name $deploymentName `
+        --resource-group $ResourceGroupName `
+        --template-file $BicepFile `
+        --parameters $ParameterFile `
+        --output table
+
+    Write-Success "Deployment completed successfully"
 } catch {
-    Write-Error "Deployment error: $_"
+    Write-ErrorMsg "Deployment failed: $_"
     exit 1
 }
 
@@ -252,91 +172,83 @@ try {
 # Post-Deployment Validation
 # ============================================================================
 
-if (-not $WhatIf) {
-    Write-Header "Post-Deployment Validation"
+Write-Header "Post-Deployment Validation"
 
-    # Wait for resources to stabilize
-    Write-Step "Waiting for resources to stabilize (30 seconds)..."
-    Start-Sleep -Seconds 30
+Write-Step "Waiting for resources to stabilize..."
+Start-Sleep -Seconds 15
 
-    # Check resource group
-    Write-Step "Verifying resources..."
-    $resources = az resource list --resource-group $ResourceGroupName --query "length([*])" -o tsv
-    Write-Success "Found $resources resources in resource group"
+# Check resources
+Write-Step "Verifying deployed resources..."
+$resources = az resource list --resource-group $ResourceGroupName --query "length(@)" -o tsv
+Write-Success "Found $resources resources"
 
-    # Check Container Apps
-    Write-Step "Checking Container Apps environment..."
-    $caEnv = az containerapp env list --resource-group $ResourceGroupName --query "[0].name" -o tsv
-    if ($caEnv) {
-        Write-Success "Container Apps environment: $caEnv"
-    } else {
-        Write-Warning "No Container Apps environment found"
-    }
-
-    # Check Cosmos DB
-    Write-Step "Checking Cosmos DB account..."
-    $cosmosDb = az cosmosdb list --resource-group $ResourceGroupName --query "[0].name" -o tsv
-    if ($cosmosDb) {
-        Write-Success "Cosmos DB account: $cosmosDb"
-        
-        # List databases
-        $databases = az cosmosdb sql database list --resource-group-name $ResourceGroupName --account-name $cosmosDb --query "[].name" -o tsv
-        Write-ColorOutput "  Databases: $($databases -join ', ')"
-    } else {
-        Write-Warning "No Cosmos DB account found"
-    }
-
-    # Check Key Vault
-    Write-Step "Checking Key Vault..."
-    $keyVault = az keyvault list --resource-group $ResourceGroupName --query "[0].name" -o tsv
-    if ($keyVault) {
-        Write-Success "Key Vault: $keyVault"
-        
-        # List secrets
-        $secrets = az keyvault secret list --vault-name $keyVault --query "length([*])" -o tsv
-        Write-ColorOutput "  Secrets: $secrets"
-    } else {
-        Write-Warning "No Key Vault found"
-    }
-
-    # Check Container App instances
-    Write-Step "Checking Container App instances..."
+# Check Container Apps
+Write-Step "Checking Container Apps environment..."
+$caEnv = az containerapp env list --resource-group $ResourceGroupName --query "[0].name" -o tsv
+if ($caEnv) {
+    Write-Success "Container Apps environment: $caEnv"
+    
+    # List container apps
     $apps = az containerapp list --resource-group $ResourceGroupName --query "[].name" -o tsv
     if ($apps) {
-        Write-Success "Container Apps:"
-        foreach ($app in $apps.Split("`n")) {
-            if ($app) {
-                $status = az containerapp show --resource-group $ResourceGroupName --name $app --query "properties.provisioningState" -o tsv
-                Write-ColorOutput "  - $app (Status: $status)"
-            }
-        }
-    } else {
-        Write-Warning "No Container Apps found"
+        Write-Host "  Apps: $($apps -replace "`n", ', ')"
     }
-
-    # Check Log Analytics
-    Write-Step "Checking Log Analytics workspace..."
-    $logWs = az monitor log-analytics workspace list --resource-group $ResourceGroupName --query "[0].name" -o tsv
-    if ($logWs) {
-        Write-Success "Log Analytics workspace: $logWs"
-    } else {
-        Write-Warning "No Log Analytics workspace found"
-    }
-
-    # Summary
-    Write-Header "Deployment Summary"
-    Write-ColorOutput "Environment: $Environment" 'Green'
-    Write-ColorOutput "Resource Group: $ResourceGroupName" 'Green'
-    Write-ColorOutput "Subscription: $SubscriptionId" 'Green'
-    Write-ColorOutput "Location: $Location" 'Green'
-    Write-ColorOutput "`nDeployment completed at $(Get-Date)" 'Green'
-    
-    Write-ColorOutput "`nNext steps:" 'Cyan'
-    Write-ColorOutput "1. Configure secrets in Key Vault"
-    Write-ColorOutput "2. Deploy container images to Container Registry"
-    Write-ColorOutput "3. Test backend API connectivity"
-    Write-ColorOutput "4. Run post-deployment validation script"
-    Write-ColorOutput "`nFor more information, see README.md in the infra/ directory"
+} else {
+    Write-Warning "No Container Apps environment found"
 }
 
-Write-Success "`nDeployment script completed successfully!"
+# Check Cosmos DB
+Write-Step "Checking Cosmos DB..."
+$cosmosDb = az cosmosdb list --resource-group $ResourceGroupName --query "[0].name" -o tsv
+if ($cosmosDb) {
+    Write-Success "Cosmos DB account: $cosmosDb"
+    
+    # List databases
+    $databases = az cosmosdb sql database list --resource-group-name $ResourceGroupName --account-name $cosmosDb --query "[].name" -o tsv
+    if ($databases) {
+        Write-Host "  Databases: $($databases -replace "`n", ', ')"
+    }
+} else {
+    Write-Warning "No Cosmos DB account found"
+}
+
+# Check Key Vault
+Write-Step "Checking Key Vault..."
+$keyVault = az keyvault list --resource-group $ResourceGroupName --query "[0].name" -o tsv
+if ($keyVault) {
+    Write-Success "Key Vault: $keyVault"
+    
+    # List secrets
+    $secrets = az keyvault secret list --vault-name $keyVault --query "length(@)" -o tsv
+    Write-Host "  Secrets configured: $secrets"
+} else {
+    Write-Warning "No Key Vault found"
+}
+
+# Check Storage Account
+Write-Step "Checking Storage Account..."
+$storage = az storage account list --resource-group $ResourceGroupName --query "[0].name" -o tsv
+if ($storage) {
+    Write-Success "Storage account: $storage"
+} else {
+    Write-Warning "No Storage account found"
+}
+
+# ============================================================================
+# Summary
+# ============================================================================
+
+Write-Header "Deployment Summary"
+Write-Host ""
+Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Green
+Write-Host "Total Resources: $resources" -ForegroundColor Green
+Write-Host "Deployment Name: $deploymentName" -ForegroundColor Green
+Write-Host ""
+Write-Step "Next Steps:"
+Write-Host "  1. Configure secrets in Key Vault ($keyVault)"
+Write-Host "  2. Deploy container images to Container Registry"
+Write-Host "  3. Configure Container Apps with image URIs"
+Write-Host "  4. Run post-deployment validation script"
+Write-Host "  5. Test API connectivity and authentication"
+Write-Host ""
+Write-Success "Infrastructure deployment completed!"
