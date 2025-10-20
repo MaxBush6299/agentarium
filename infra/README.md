@@ -1,6 +1,30 @@
 # AI Agents Demo - Infrastructure Setup
 
+> **⚠️ IMPORTANT**: Due to an Azure CLI bug with `.bicepparam` files, use the PowerShell deployment script which includes automatic workarounds:
+> ```powershell
+> .\infra\deploy.ps1 -Environment dev
+> ```
+> This script automatically creates all resources including Cosmos DB collections.
+
 ## Quick Start
+
+### Option 1: PowerShell Script (Recommended ✅)
+
+```powershell
+# Deploy to development environment
+.\infra\deploy.ps1 -Environment dev
+
+# Deploy to production environment  
+.\infra\deploy.ps1 -Environment prod
+```
+
+**Benefits:**
+- ✅ Handles Azure CLI deployment bugs automatically
+- ✅ Creates Cosmos DB collections if deployment skips them
+- ✅ Validates all resources post-deployment
+- ✅ Provides clear error messages and next steps
+
+### Option 2: Manual Azure CLI (Advanced Users)
 
 ### 1. **Setup Environment Variables**
 
@@ -212,6 +236,61 @@ az deployment group create \
 
 ## Troubleshooting
 
+### ⚠️ "DeploymentNotFound" Error (Known Issue)
+
+**Symptom:** Deployment returns `{"error":{"code":"DeploymentNotFound"}}` but resources appear in Azure Portal.
+
+**Cause:** Known Azure CLI bug with `.bicepparam` files (tracked issue #31709, fixed in v2.76.0+ but still occurs intermittently).
+
+**Solution:** Use `deploy.ps1` which handles this automatically, or run the post-deploy script manually:
+```powershell
+.\infra\post-deploy-setup.ps1 -Environment dev
+```
+
+This will:
+- ✅ Verify all resources exist
+- ✅ Create missing Cosmos DB collections
+- ✅ Validate Container Apps
+
+### Missing Cosmos DB Collections
+
+**Symptom:** Cosmos DB account exists but has no collections.
+
+**Cause:** Side effect of the DeploymentNotFound bug.
+
+**Automatic Fix:** The `deploy.ps1` script runs `post-deploy-setup.ps1` automatically.
+
+**Manual Fix:**
+```powershell
+# Run post-deployment setup
+.\infra\post-deploy-setup.ps1 -Environment dev
+
+# Verify collections
+az cosmosdb sql container list \
+  --account-name <cosmos-account-name> \
+  --database-name agents-db \
+  --resource-group rg-agentdemo-dev \
+  --output table
+```
+
+Should show 6 collections: `threads`, `runs`, `steps`, `toolCalls`, `agents`, `messages`
+
+### Container Apps Can't Connect to Cosmos DB
+
+**Symptom:** Container Apps fail with connection errors to Cosmos DB.
+
+**Cause:** Cosmos DB deployed with `publicNetworkAccess: 'Disabled'` but no private endpoints.
+
+**Temporary Fix (Development):**
+```powershell
+az cosmosdb update \
+  --name <cosmos-account-name> \
+  --resource-group rg-agentdemo-dev \
+  --enable-public-network true
+```
+
+**Permanent Fix (Production):** Create private endpoints (see docs/private-endpoints.md)
+
 ### Bicep Compilation Issues
 ```bash
 # Validate Bicep syntax
@@ -229,6 +308,17 @@ az deployment group show -g <resource-group> -n <deployment-name>
 # View detailed error logs
 az deployment group show -g <resource-group> -n <deployment-name> --query properties.error
 ```
+
+### Future Deployments
+
+**Q: Will these issues happen again?**
+
+**A:** The Bicep template fixes are permanent, but the Azure CLI bug may persist:
+- ✅ **Bicep errors**: Fixed permanently (Key Vault, Cosmos DB, Log Analytics)
+- ✅ **Collections**: `post-deploy-setup.ps1` runs automatically with `deploy.ps1`
+- ⚠️ **CLI bug**: May still occur until Microsoft fixes it (use `deploy.ps1` script)
+
+**Best Practice:** Always use `.\infra\deploy.ps1` which includes automatic workarounds.
 
 ### Accessing Secrets After Deployment
 ```bash

@@ -235,6 +235,25 @@ if ($storage) {
 }
 
 # ============================================================================
+# Run Post-Deployment Setup (Child Resources)
+# ============================================================================
+
+Write-Header "Running Post-Deployment Setup"
+Write-Host "Creating child resources (Cosmos DB collections, etc.)..." -ForegroundColor Yellow
+Write-Host ""
+
+$postDeployScript = Join-Path $PSScriptRoot "post-deploy-setup.ps1"
+if (Test-Path $postDeployScript) {
+    & $postDeployScript -Environment $Environment -ResourceGroup $ResourceGroupName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Post-deployment setup encountered issues. Check output above."
+    }
+} else {
+    Write-Warning "Post-deployment script not found: $postDeployScript"
+    Write-Host "Run manually: .\infra\post-deploy-setup.ps1 -Environment $Environment"
+}
+
+# ============================================================================
 # Summary
 # ============================================================================
 
