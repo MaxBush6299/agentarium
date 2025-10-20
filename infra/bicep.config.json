@@ -1,0 +1,59 @@
+{
+  "analyzers": {
+    "core": {
+      "enabled": true,
+      "rules": {
+        "adminusername-should-not-be-literal": {
+          "level": "warning"
+        },
+        "artifacts-parameter-naming": {
+          "level": "warning"
+        },
+        "decompiler-metadata-serialization": {
+          "level": "off"
+        },
+        "no-hardcoded-environment-urls": {
+          "level": "warning"
+        },
+        "no-hardcoded-locations": {
+          "level": "warning"
+        },
+        "no-loc-expr-outside-params": {
+          "level": "error"
+        },
+        "no-unnecessary-dependson": {
+          "level": "warning"
+        },
+        "outputs-should-not-contain-secrets": {
+          "level": "error"
+        },
+        "secure-parameter-default": {
+          "level": "error"
+        },
+        "secure-secrets-in-params": {
+          "level": "error"
+        },
+        "simplify-interpolation": {
+          "level": "warning"
+        },
+        "use-stable-vm-image": {
+          "level": "warning"
+        },
+        "no-unused-params": {
+          "level": "warning"
+        },
+        "no-unused-variables": {
+          "level": "warning"
+        }
+      }
+    }
+  },
+  "moduleAliases": {
+    "br": {
+      "public": "mcr.microsoft.com/bicep/avm"
+    }
+  },
+  "experimentalFeaturesEnabled": ["userDefinedTypes", "symbolicReferences", "sourceMapping"],
+  "cloud": "AzureCloud",
+  "implicitDependencies": []
+}

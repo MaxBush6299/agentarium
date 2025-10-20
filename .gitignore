@@ -1,0 +1,63 @@
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Bicep
+*.bicepout
+bicep.out
+*.json.bicep
+
+# Azure
+.azure/
+*.cer
+*.key
+
+# Terraform (if needed)
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Local test files
+test-local/
+*.local.json
