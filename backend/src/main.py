@@ -13,6 +13,8 @@ from fastapi.responses import JSONResponse
 from src.config import settings
 from src.utils.secrets import initialize_secrets
 from src.persistence.cosmos_client import initialize_cosmos
+from src.a2a.server import router as a2a_router, well_known_router
+from src.a2a.api import router as agent_cards_router
 
 # Configure logging
 logging.basicConfig(
@@ -87,6 +89,13 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Total-Count", "X-Page-Count"],
 )
+
+
+# Include A2A Protocol Routers
+app.include_router(well_known_router)  # Agent card at /.well-known/agent.json
+app.include_router(a2a_router)  # A2A endpoints at /a2a
+app.include_router(agent_cards_router)  # Agent card management API at /api/agent-cards
+logger.info("A2A Protocol routers registered")
 
 
 # Health Check Endpoint
