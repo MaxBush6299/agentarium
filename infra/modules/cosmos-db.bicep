@@ -51,18 +51,12 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
       {
         locationName: location
         failoverPriority: 0
-        isZoneRedundant: true
+        isZoneRedundant: false
       }
     ]
     capabilities: [
       {
         name: 'EnableServerless'
-      }
-      {
-        name: 'EnableTable'
-      }
-      {
-        name: 'EnableCassandra'
       }
     ]
     backupPolicy: {

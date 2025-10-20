@@ -65,9 +65,6 @@ param keyVaultName string
 @description('Enable Key Vault soft delete')
 param keyVaultEnableSoftDelete bool = true
 
-@description('Enable Key Vault purge protection')
-param keyVaultEnablePurgeProtection bool = true
-
 @description('Enable Key Vault private endpoints')
 param keyVaultPrivateEndpointsEnabled bool = true
 
@@ -201,7 +198,6 @@ module keyVaultModule './modules/key-vault.bicep' = {
     vaultName: keyVaultName
     managedIdentityPrincipalId: keyVaultAccessPrincipalId
     enableSoftDelete: keyVaultEnableSoftDelete
-    enablePurgeProtection: keyVaultEnablePurgeProtection
     privateEndpointsEnabled: keyVaultPrivateEndpointsEnabled
   }
 }

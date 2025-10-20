@@ -3,7 +3,7 @@ using '../main.bicep'
 // Development environment parameters for AI Agents Demo
 // These values are optimized for development/testing
 
-param location = 'eastus'
+param location = 'westus'
 
 param environmentName = 'dev'
 
@@ -29,7 +29,7 @@ param integrationSubnetAddressSpace = '10.0.3.0/24'
 // COSMOS DB - Development (lower throughput)
 // ============================================================================
 
-param cosmosDbAccountName = 'cosmosdb-agents-dev'
+param cosmosDbAccountName = 'cosmosdb-agents-dev-20251020'
 param cosmosDbThroughputMode = 'manual'
 param cosmosDbManualProvisionedThroughput = 400
 param cosmosDbAutoscaleMaxThroughput = 4000
@@ -40,9 +40,8 @@ param cosmosDbEnableBackupRedundancy = false
 // KEY VAULT
 // ============================================================================
 
-param keyVaultName = 'kv-agents-dev'
+param keyVaultName = 'kv-agentsdev-20251020'
 param keyVaultEnableSoftDelete = true
-param keyVaultEnablePurgeProtection = false
 param keyVaultPrivateEndpointsEnabled = false
 
 // ============================================================================
@@ -67,7 +66,7 @@ param storagePrivateEndpointsEnabled = false
 
 param logAnalyticsWorkspaceName = 'law-agents-dev'
 param appInsightsName = 'appi-agents-dev'
-param logRetentionDays = 7
+param logRetentionDays = 30
 param appInsightsDailyCapGb = 1
 
 // ============================================================================

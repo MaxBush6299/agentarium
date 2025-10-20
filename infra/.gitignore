@@ -1,0 +1,11 @@
+# Bicep compiled output
+*.json
+
+# Deployment artifacts
+.terraform/
+*.tfstate*
+.cache/
+
+# Local testing
+.env
+.env.local

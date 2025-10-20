@@ -16,9 +16,6 @@ param managedIdentityPrincipalId string
 @description('Enable soft delete protection')
 param enableSoftDelete bool = true
 
-@description('Purge protection enabled')
-param enablePurgeProtection bool = true
-
 @description('Private endpoints enabled')
 param privateEndpointsEnabled bool = true
 
@@ -40,7 +37,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: true
     enableSoftDelete: enableSoftDelete
     softDeleteRetentionInDays: 90
-    enablePurgeProtection: enablePurgeProtection
     networkAcls: {
       bypass: 'AzureServices'
       defaultAction: privateEndpointsEnabled ? 'Deny' : 'Allow'

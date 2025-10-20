@@ -13,7 +13,7 @@ param logAnalyticsWorkspaceName string
 @description('Application Insights name')
 param appInsightsName string
 
-@description('Log Analytics workspace retention in days (0-730, 0 = unlimited)')
+@description('Log Analytics workspace retention in days (30-730, see SKU limits)')
 param logRetentionDays int = 30
 
 @description('Application Insights daily data cap in GB')
@@ -46,7 +46,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalyticsWorkspace.id
-    RetentionInDays: logRetentionDays
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
     IngestionMode: 'LogAnalytics'

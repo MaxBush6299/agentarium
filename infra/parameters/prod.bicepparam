@@ -44,7 +44,6 @@ param cosmosDbEnableBackupRedundancy = true
 
 param keyVaultName = 'kv-agents-prod'
 param keyVaultEnableSoftDelete = true
-param keyVaultEnablePurgeProtection = true
 param keyVaultPrivateEndpointsEnabled = true
 
 // ============================================================================
