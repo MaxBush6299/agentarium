@@ -12,6 +12,7 @@ import {
 } from '@fluentui/react-components'
 import { MessageList } from '../components/chat/MessageList'
 import { InputBox } from '../components/chat/InputBox'
+import { ExportButton } from '../components/chat/ExportButton'
 import { Message, MessageRole } from '../types/message'
 import { useTraces } from '../hooks/useTraces'
 import { streamChat } from '../services/api'
@@ -42,6 +43,18 @@ const useStyles = makeStyles({
     padding: '16px 24px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: tokens.colorNeutralBackground1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '16px',
+  },
+  chatHeaderLeft: {
+    flex: 1,
+  },
+  chatHeaderActions: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
   },
   chatContent: {
     flex: 1,
@@ -213,22 +226,27 @@ export const ChatPage = () => {
       <div className={styles.main}>
         {/* Chat header */}
         <div className={styles.chatHeader}>
-          <Text weight="semibold" style={{ fontSize: '16px' }}>
-            {locationState?.agentId 
-              ? `Chat with Agent: ${locationState.agentId}` 
-              : 'New Conversation'}
-          </Text>
-          {threadId && (
-            <Text
-              style={{
-                fontSize: tokens.fontSizeBase200,
-                color: tokens.colorNeutralForeground3,
-                marginTop: '4px',
-              }}
-            >
-              Thread: {threadId}
+          <div className={styles.chatHeaderLeft}>
+            <Text weight="semibold" style={{ fontSize: '16px' }}>
+              {locationState?.agentId 
+                ? `Chat with Agent: ${locationState.agentId}` 
+                : 'New Conversation'}
             </Text>
-          )}
+            {threadId && (
+              <Text
+                style={{
+                  fontSize: tokens.fontSizeBase200,
+                  color: tokens.colorNeutralForeground3,
+                  marginTop: '4px',
+                }}
+              >
+                Thread: {threadId}
+              </Text>
+            )}
+          </div>
+          <div className={styles.chatHeaderActions}>
+            <ExportButton messages={messages} traces={traces} agentId={locationState?.agentId} />
+          </div>
         </div>
 
         {/* Chat content */}
