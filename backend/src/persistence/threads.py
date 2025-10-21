@@ -7,6 +7,8 @@ import logging
 import uuid
 from datetime import datetime
 from typing import List, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from azure.cosmos import exceptions
 
 from src.persistence.cosmos_client import get_cosmos
@@ -15,6 +17,9 @@ from src.persistence.models import Thread, Message
 logger = logging.getLogger(__name__)
 
 CONTAINER_NAME = "threads"
+
+# Thread pool for running blocking Cosmos DB operations
+_executor = ThreadPoolExecutor(max_workers=5)
 
 
 class ThreadRepository:
@@ -56,9 +61,10 @@ class ThreadRepository:
         )
         
         try:
-            # Insert into Cosmos DB
+            # Insert into Cosmos DB (blocking operation)
             item = thread.model_dump(by_alias=True, exclude_none=True, mode='json')
-            self.container.create_item(body=item)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(_executor, lambda: self.container.create_item(body=item))
             
             logger.info(f"Created thread {thread_id} for agent {agent_id}")
             return thread
@@ -79,9 +85,13 @@ class ThreadRepository:
             Thread object or None if not found
         """
         try:
-            item = self.container.read_item(
-                item=thread_id,
-                partition_key=agent_id
+            loop = asyncio.get_event_loop()
+            item = await loop.run_in_executor(
+                _executor,
+                lambda: self.container.read_item(
+                    item=thread_id,
+                    partition_key=agent_id
+                )
             )
             return Thread(**item)
             
@@ -123,18 +133,23 @@ class ThreadRepository:
                 conditions.append(f"c.user_id = '{user_id}'")
             
             where_clause = " AND ".join(conditions)
+            # Cosmos DB uses TOP and OFFSET (not FETCH NEXT ROWS ONLY like SQL Server)
             query = f"""
                 SELECT * FROM c
                 WHERE {where_clause}
                 ORDER BY c.updated_at DESC
-                OFFSET {offset} ROWS
-                FETCH NEXT {limit} ROWS ONLY
+                OFFSET {offset}
+                LIMIT {limit}
             """
             
-            items = list(self.container.query_items(
-                query=query,
-                enable_cross_partition_query=True
-            ))
+            loop = asyncio.get_event_loop()
+            items = await loop.run_in_executor(
+                _executor,
+                lambda: list(self.container.query_items(
+                    query=query,
+                    enable_cross_partition_query=True
+                ))
+            )
             
             threads = [Thread(**item) for item in items]
             logger.debug(f"Listed {len(threads)} threads (agent_id={agent_id}, user_id={user_id})")
@@ -165,10 +180,14 @@ class ThreadRepository:
             if thread.etag:
                 options['if_match'] = thread.etag
             
-            updated_item = self.container.replace_item(
-                item=thread.id,
-                body=item,
-                **options
+            loop = asyncio.get_event_loop()
+            updated_item = await loop.run_in_executor(
+                _executor,
+                lambda: self.container.replace_item(
+                    item=thread.id,
+                    body=item,
+                    **options
+                )
             )
             
             logger.info(f"Updated thread {thread.id}")
@@ -230,6 +249,7 @@ class ThreadRepository:
     async def delete(self, thread_id: str, agent_id: str, soft_delete: bool = True) -> bool:
         """
         Delete a thread (soft or hard delete).
+        Idempotent operation - returns True even if thread doesn't exist.
         
         Args:
             thread_id: Thread ID
@@ -237,29 +257,33 @@ class ThreadRepository:
             soft_delete: If True, mark as deleted; if False, actually delete
             
         Returns:
-            True if successful
+            True if successful (or thread didn't exist)
         """
         try:
             if soft_delete:
                 thread = await self.get(thread_id, agent_id)
-                if not thread:
-                    return False
-                
-                thread.status = "deleted"
-                await self.update(thread)
-                logger.info(f"Soft deleted thread {thread_id}")
+                if thread:
+                    thread.status = "deleted"
+                    await self.update(thread)
+                    logger.info(f"Soft deleted thread {thread_id}")
+                else:
+                    logger.info(f"Thread {thread_id} not found (idempotent delete)")
             else:
-                self.container.delete_item(
-                    item=thread_id,
-                    partition_key=agent_id
-                )
-                logger.info(f"Hard deleted thread {thread_id}")
+                loop = asyncio.get_event_loop()
+                try:
+                    await loop.run_in_executor(
+                        _executor,
+                        lambda: self.container.delete_item(
+                            item=thread_id,
+                            partition_key=agent_id
+                        )
+                    )
+                    logger.info(f"Hard deleted thread {thread_id}")
+                except exceptions.CosmosResourceNotFoundError:
+                    logger.info(f"Thread {thread_id} not found (idempotent delete)")
             
             return True
             
-        except exceptions.CosmosResourceNotFoundError:
-            logger.warning(f"Thread {thread_id} not found for deletion")
-            return False
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Error deleting thread {thread_id}: {str(e)}")
             raise
@@ -292,10 +316,14 @@ class ThreadRepository:
             where_clause = " AND ".join(conditions)
             query = f"SELECT VALUE COUNT(1) FROM c WHERE {where_clause}"
             
-            result = list(self.container.query_items(
-                query=query,
-                enable_cross_partition_query=True
-            ))
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                _executor,
+                lambda: list(self.container.query_items(
+                    query=query,
+                    enable_cross_partition_query=True
+                ))
+            )
             
             return result[0] if result else 0
             

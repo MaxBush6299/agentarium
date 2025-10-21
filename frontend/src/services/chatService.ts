@@ -5,6 +5,7 @@
 
 import { Message, ChatThread, StreamEvent } from '@/types/chat'
 import { getAccessToken } from './authService'
+import { apiGet, apiPost, apiDelete } from './api'
 import { config } from '@/config'
 
 const CHAT_ENDPOINT = '/agents'
@@ -114,72 +115,38 @@ export const streamChat = async (
 }
 
 /**
+ * List all threads for an agent
+ */
+export const listThreads = async (agentId: string, limit?: number): Promise<ChatThread[]> => {
+  const params = new URLSearchParams()
+  if (limit) {
+    params.append('limit', limit.toString())
+  }
+  
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const response = await apiGet<{ threads: ChatThread[]; total: number; page: number; page_size: number }>(`/agents/${agentId}/threads${query}`)
+  return response.threads
+}
+
+/**
  * Get chat thread history
  */
 export const getChatThread = async (agentId: string, threadId: string): Promise<ChatThread> => {
-  const token = await getAccessToken()
-  if (!token) {
-    throw new Error('No access token available')
-  }
-
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads/${threadId}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
-
-  return response.json()
+  return apiGet<ChatThread>(`/agents/${agentId}/threads/${threadId}`)
 }
 
 /**
  * Create new chat thread
  */
 export const createChatThread = async (agentId: string): Promise<ChatThread> => {
-  const token = await getAccessToken()
-  if (!token) {
-    throw new Error('No access token available')
-  }
-
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ agentId }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
-
-  return response.json()
+  return apiPost<ChatThread>(`/agents/${agentId}/threads`, { agentId })
 }
 
 /**
  * Delete chat thread
  */
 export const deleteChatThread = async (agentId: string, threadId: string): Promise<void> => {
-  const token = await getAccessToken()
-  if (!token) {
-    throw new Error('No access token available')
-  }
-
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads/${threadId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
+  await apiDelete(`/agents/${agentId}/threads/${threadId}`)
 }
 
 /**

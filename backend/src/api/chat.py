@@ -485,6 +485,31 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
         print("========== FINALLY BLOCK END ==========\n")
 
 
+@router.post("/{agent_id}/threads")
+async def create_thread(
+    agent_id: str = Path(..., description="Agent ID")
+):
+    """
+    Create a new thread for an agent.
+    
+    Args:
+        agent_id: Agent ID
+        
+    Returns:
+        Created Thread object
+    """
+    try:
+        thread_repo = get_thread_repository()
+        
+        thread = await thread_repo.create(agent_id)
+        
+        return thread
+    
+    except Exception as e:
+        logger.error(f"Error creating thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{agent_id}/threads")
 async def list_threads(
     agent_id: str = Path(..., description="Agent ID"),
@@ -583,19 +608,13 @@ async def delete_thread(
     try:
         thread_repo = get_thread_repository()
         
-        # Verify thread belongs to agent
+        # Verify thread belongs to agent (if it exists)
         thread = await thread_repo.get(thread_id, agent_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
-        
-        if thread.agent_id != agent_id:
+        if thread and thread.agent_id != agent_id:
             raise HTTPException(status_code=400, detail="Thread belongs to different agent")
         
-        # Delete thread
-        success = await thread_repo.delete(thread_id, agent_id, soft_delete=not hard_delete)
-        
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        # Delete thread (idempotent - succeeds even if thread doesn't exist)
+        await thread_repo.delete(thread_id, agent_id, soft_delete=not hard_delete)
         
         delete_type = "permanently deleted" if hard_delete else "soft deleted"
         return {"message": f"Thread {thread_id} {delete_type}"}

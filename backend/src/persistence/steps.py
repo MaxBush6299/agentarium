@@ -122,8 +122,8 @@ class StepRepository:
                 SELECT * FROM c
                 WHERE c.run_id = '{run_id}'
                 ORDER BY c.started_at ASC
-                OFFSET 0 ROWS
-                FETCH NEXT {limit} ROWS ONLY
+                OFFSET 0
+                LIMIT {limit}
             """
             
             items = list(self.container.query_items(
@@ -160,8 +160,8 @@ class StepRepository:
                 SELECT * FROM c
                 WHERE c.thread_id = '{thread_id}'
                 ORDER BY c.started_at DESC
-                OFFSET 0 ROWS
-                FETCH NEXT {limit} ROWS ONLY
+                OFFSET 0
+                LIMIT {limit}
             """
             
             items = list(self.container.query_items(

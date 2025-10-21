@@ -129,8 +129,8 @@ class RunRepository:
                 SELECT * FROM c
                 WHERE c.thread_id = '{thread_id}'
                 ORDER BY c.created_at DESC
-                OFFSET {offset} ROWS
-                FETCH NEXT {limit} ROWS ONLY
+                OFFSET {offset}
+                LIMIT {limit}
             """
             
             items = list(self.container.query_items(
