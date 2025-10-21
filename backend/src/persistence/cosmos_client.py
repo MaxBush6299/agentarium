@@ -45,8 +45,16 @@ class CosmosDBClient:
                 self.client = CosmosClient.from_connection_string(connection_string)
                 logger.info("CosmosDB client initialized with connection string")
             elif key:
-                self.client = CosmosClient(endpoint, credential=key)
-                logger.info(f"CosmosDB client initialized with key auth to {endpoint}")
+                try:
+                    self.client = CosmosClient(endpoint, credential=key)
+                    logger.info(f"CosmosDB client initialized with key auth to {endpoint}")
+                except Exception as key_error:
+                    # If key auth fails (e.g., local auth disabled), fall back to Azure CLI
+                    logger.warning(f"Key auth failed: {key_error}. Trying Azure CLI credential...")
+                    from azure.identity import AzureCliCredential
+                    credential = AzureCliCredential()
+                    self.client = CosmosClient(endpoint, credential=credential)
+                    logger.info(f"CosmosDB client initialized with Azure CLI credential to {endpoint}")
             else:
                 # For managed identity, DefaultAzureCredential is passed as credential
                 from azure.identity import DefaultAzureCredential

@@ -1,0 +1,188 @@
+{
+  "agent_id": "sql-agent",
+  "name": "SQL Agent",
+  "version": "1.0.0",
+  "description": "Data analyst specializing in MSSQL database queries, SQL generation, and business intelligence with dynamic schema discovery",
+  "capabilities": [
+    "dynamic_schema_discovery",
+    "sql_query_generation",
+    "data_analysis",
+    "business_intelligence",
+    "multi_database_support"
+  ],
+  "skills": {
+    "dynamic_schema_discovery": {
+      "name": "Dynamic Schema Discovery",
+      "description": "Automatically discover database schema, tables, and relationships using MCP tools",
+      "examples": [
+        "What tables are available in this database?",
+        "Describe the structure of the Sales.Customer table",
+        "Show me all columns in the Product table"
+      ]
+    },
+    "sql_query_generation": {
+      "name": "SQL Query Generation",
+      "description": "Generate safe, optimized SQL queries to answer business questions",
+      "examples": [
+        "What are the top 10 products by revenue?",
+        "Show me all orders from last month",
+        "Which customers have spent more than $10,000?"
+      ]
+    },
+    "data_analysis": {
+      "name": "Data Analysis",
+      "description": "Analyze database data and provide deep insights, not just raw data",
+      "examples": [
+        "Analyze sales trends over the last 6 months",
+        "What patterns do you see in customer purchasing behavior?",
+        "Compare product performance across categories"
+      ]
+    },
+    "sales_analytics": {
+      "name": "Sales Analytics",
+      "description": "Query and analyze sales data including orders, revenue, and performance metrics",
+      "examples": [
+        "What were total sales last quarter?",
+        "Show me sales by region",
+        "Which sales territories are performing best?"
+      ]
+    },
+    "customer_insights": {
+      "name": "Customer Insights",
+      "description": "Analyze customer data to understand demographics, behavior, and value",
+      "examples": [
+        "Who are our top 5 customers by total purchases?",
+        "Show me customer distribution by region",
+        "Find customers who haven't ordered in 6 months"
+      ]
+    },
+    "product_analysis": {
+      "name": "Product Analysis",
+      "description": "Analyze product catalog, performance, and inventory",
+      "examples": [
+        "List products by category with sales counts",
+        "Which product categories generate the most revenue?",
+        "Show me products with low sales that might need promotion"
+      ]
+    },
+    "business_intelligence": {
+      "name": "Business Intelligence",
+      "description": "Generate business reports and strategic insights from database analysis",
+      "examples": [
+        "Create a summary report of Q4 performance",
+        "What insights can you provide about our best-selling products?",
+        "Analyze employee sales performance"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "MSSQL MCP",
+      "type": "mcp",
+      "description": "Model Context Protocol tool for MSSQL database with dynamic tool discovery",
+      "capabilities": [
+        "list_tables",
+        "describe_table",
+        "read_data",
+        "execute_queries",
+        "dynamic_discovery"
+      ],
+      "features": [
+        "Works with any MSSQL database configured in MCP server",
+        "Database-agnostic agent design",
+        "Change database without code changes"
+      ]
+    }
+  ],
+  "model": "gpt-4o",
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "system_prompt_preview": "You are a data analyst and SQL expert with access to a MSSQL database through MCP tools. Use dynamic discovery to explore schema...",
+  "database_configuration": {
+    "type": "MSSQL",
+    "description": "Works with any MSSQL database configured in the MCP server",
+    "common_databases": [
+      "AdventureWorks (bicycle manufacturer sample)",
+      "Northwind (trading company sample)",
+      "Custom enterprise databases"
+    ],
+    "discovery_approach": "Agent uses list_tables and describe_table to understand schema at runtime"
+  },
+  "query_guidelines": [
+    "SELECT statements only (read-only access)",
+    "Proper JOINs for multi-table queries",
+    "WHERE clauses for filtering",
+    "Aggregations (SUM, COUNT, AVG) for summaries",
+    "ORDER BY for relevant sorting",
+    "TOP/LIMIT for reasonable result sizes"
+  ],
+  "safety_features": [
+    "Read-only database access (SELECT only)",
+    "SQL injection protection via MCP server",
+    "Query timeout limits",
+    "Result size limits",
+    "OAuth 2.0 authentication"
+  ],
+  "tags": [
+    "sql",
+    "database",
+    "analytics",
+    "business-intelligence",
+    "data-analysis",
+    "mssql",
+    "dynamic-discovery",
+    "database-agnostic"
+  ],
+  "metadata": {
+    "author": "Demo Project Team",
+    "created_at": "2025-01-15T00:00:00Z",
+    "updated_at": "2025-01-15T00:00:00Z",
+    "license": "MIT",
+    "maturity": "beta"
+  },
+  "endpoints": {
+    "chat": "/api/v1/agents/sql-agent/chat",
+    "card": "/api/v1/agents/sql-agent/card"
+  },
+  "example_conversations": [
+    {
+      "title": "Top Products by Revenue",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What are our top 5 products by revenue?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'll query the sales data to find products with the highest total revenue.\n\n**Approach:** Join SalesOrderDetail with Product to get product names and calculate total revenue per product.\n\n**SQL Query:**\n```sql\nSELECT TOP 5\n    p.Name AS ProductName,\n    p.ProductNumber,\n    SUM(sod.LineTotal) AS TotalRevenue,\n    COUNT(DISTINCT sod.SalesOrderID) AS OrderCount\nFROM Sales.SalesOrderDetail sod\nINNER JOIN Production.Product p ON sod.ProductID = p.ProductID\nGROUP BY p.Name, p.ProductNumber\nORDER BY TotalRevenue DESC\n```\n\n**Results:**\n| ProductName | ProductNumber | TotalRevenue | OrderCount |\n|-------------|---------------|--------------|------------|\n| Mountain-200 Black, 46 | BK-M68B-46 | $1,200,576.89 | 489 |\n| Road-250 Red, 48 | BK-R93R-48 | $985,423.12 | 412 |\n| Mountain-200 Silver, 42 | BK-M68S-42 | $876,234.45 | 378 |\n| Road-350-W Yellow, 44 | BK-R79Y-44 | $789,654.23 | 345 |\n| Touring-1000 Blue, 60 | BK-T79U-60 | $723,890.67 | 298 |\n\n**Insights:**\n- Mountain bikes dominate the top revenue products\n- The top product generates over $1.2M in revenue\n- These 5 products account for approximately 28% of total sales\n- Mountain-200 Black has the highest order volume (489 orders)\n\n**Follow-up:** Would you like to see revenue trends over time for these products?"
+        }
+      ]
+    },
+    {
+      "title": "Customer Analysis",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Who are our top 10 customers by total purchases?"
+        },
+        {
+          "role": "assistant",
+          "content": "I'll find the customers with the highest total purchase amounts.\n\n**Approach:** Join Customer with SalesOrderHeader to calculate total purchases per customer, including person names for better identification.\n\n**SQL Query:**\n```sql\nSELECT TOP 10\n    c.CustomerID,\n    p.FirstName + ' ' + p.LastName AS CustomerName,\n    c.AccountNumber,\n    COUNT(soh.SalesOrderID) AS TotalOrders,\n    SUM(soh.TotalDue) AS TotalPurchases,\n    AVG(soh.TotalDue) AS AvgOrderValue,\n    MAX(soh.OrderDate) AS LastOrderDate\nFROM Sales.Customer c\nINNER JOIN Person.Person p ON c.PersonID = p.BusinessEntityID\nINNER JOIN Sales.SalesOrderHeader soh ON c.CustomerID = soh.CustomerID\nGROUP BY c.CustomerID, p.FirstName, p.LastName, c.AccountNumber\nORDER BY TotalPurchases DESC\n```\n\n**Results:**\n| CustomerName | AccountNumber | TotalOrders | TotalPurchases | AvgOrderValue | LastOrderDate |\n|--------------|---------------|-------------|----------------|---------------|---------------|\n| Jordan Turner | AW00029485 | 36 | $187,456.92 | $5,207.14 | 2024-12-15 |\n| Willie Xu | AW00029486 | 28 | $142,890.45 | $5,103.23 | 2024-11-22 |\n| ...\n\n**Insights:**\n- Top customer has spent over $187K across 36 orders\n- Average order value for top customers is around $5,000\n- Most top customers are active (recent orders in last 3 months)\n- These customers represent high-value relationships worth maintaining\n\n**Recommendations:**\n- Consider VIP program for customers with >$100K lifetime value\n- Reach out to top customers with exclusive offers\n- Monitor for any decrease in purchase frequency\n\n**Follow-up:** Would you like to see purchase patterns or product preferences for these customers?"
+        }
+      ]
+    },
+    {
+      "title": "Sales Trends",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Show me monthly sales trends for the last 6 months"
+        },
+        {
+          "role": "assistant",
+          "content": "I'll analyze monthly sales trends to show revenue patterns over the last 6 months.\n\n**Approach:** Aggregate sales by month from SalesOrderHeader, calculate totals and growth rates.\n\n**SQL Query:**\n```sql\nSELECT \n    YEAR(OrderDate) AS OrderYear,\n    MONTH(OrderDate) AS OrderMonth,\n    DATENAME(MONTH, OrderDate) AS MonthName,\n    COUNT(SalesOrderID) AS TotalOrders,\n    SUM(TotalDue) AS MonthlyRevenue,\n    AVG(TotalDue) AS AvgOrderValue\nFROM Sales.SalesOrderHeader\nWHERE OrderDate >= DATEADD(MONTH, -6, GETDATE())\nGROUP BY YEAR(OrderDate), MONTH(OrderDate), DATENAME(MONTH, OrderDate)\nORDER BY OrderYear, OrderMonth\n```\n\n**Results & Visualization:**\n```\nJul 2024: $1,245,678 (412 orders) ━━━━━━━━━━━━━━━━ 100%\nAug 2024: $1,389,234 (445 orders) ━━━━━━━━━━━━━━━━━━ 111% (+11.5%)\nSep 2024: $1,456,890 (468 orders) ━━━━━━━━━━━━━━━━━━━ 117% (+4.9%)\nOct 2024: $1,234,567 (401 orders) ━━━━━━━━━━━━━━━ 99% (-15.3%)\nNov 2024: $1,678,345 (523 orders) ━━━━━━━━━━━━━━━━━━━━━━ 135% (+36.0%)\nDec 2024: $1,890,123 (589 orders) ━━━━━━━━━━━━━━━━━━━━━━━━ 152% (+12.6%)\n```\n\n**Insights:**\n- Clear seasonal trend with Q4 showing strong growth\n- November and December show exceptional performance (holiday season)\n- October dip is typical mid-quarter pattern\n- Overall trend is positive with 51.7% growth from July to December\n- Average order value remains steady around $3,000\n\n**Observations:**\n- Q4 is clearly the strongest quarter for sales\n- Consider inventory planning for seasonal peaks\n- Marketing campaigns in Sep-Oct could help smooth the curve\n\n**Follow-up:** Would you like to break this down by product category or sales region?"
+        }
+      ]
+    }
+  ]
+}

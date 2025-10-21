@@ -15,7 +15,6 @@ from typing import Optional
 
 from .base import DemoBaseAgent
 from ..tools.mcp_tools import get_microsoft_learn_tool
-from ..tools.openapi_client import get_support_triage_tool
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,17 @@ class SupportTriageAgent:
             thread=thread
         ):
             if hasattr(event, 'content'):
-                print(event.content, end='', flush=True)
+                # Ensure all tools are callables for agent framework
+                tools = []
+                # If learn_tool is already a callable or has get_tools, use appropriately
+                if hasattr(learn_tool, "get_tools"):
+                    tools.extend(learn_tool.get_tools())
+                else:
+                    tools.append(learn_tool)
+                if hasattr(support_tool, "get_tools"):
+                    tools.extend(support_tool.get_tools())
+                else:
+                    tools.append(support_tool)
         ```
     """
     
@@ -152,12 +161,7 @@ class SupportTriageAgent:
             logger.debug("Creating Microsoft Learn tool")
             learn_tool = get_microsoft_learn_tool()
             
-            # Support Triage OpenAPI tool
-            # TODO: Add custom base_url and api_key support when OpenAPI tools are fully implemented
-            logger.debug("Creating Support Triage tool")
-            support_tool = get_support_triage_tool()
-            
-            tools = [learn_tool, support_tool]
+            tools = [learn_tool]
             logger.info(f"Created {len(tools)} tools for Support Triage Agent")
             
         except Exception as e:

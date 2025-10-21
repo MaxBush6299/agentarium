@@ -6,8 +6,14 @@ Loads configuration from environment variables with sensible defaults for local 
 import os
 from functools import lru_cache
 from typing import Optional
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+# Load .env file from backend directory
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 class Settings(BaseSettings):

@@ -84,19 +84,50 @@ class DemoBaseAgent:
         self.max_tokens = max_tokens
         self.temperature = temperature
         
-        # Initialize Azure OpenAI client with Managed Identity
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        # Initialize Azure OpenAI client with credentials
+        from src.config import settings
+        
+        endpoint = settings.AZURE_OPENAI_ENDPOINT
         if not endpoint:
             raise ValueError("AZURE_OPENAI_ENDPOINT environment variable is required")
         
         logger.info(f"Initializing agent '{name}' with model '{model}'")
         
+        # Prepare credential and api_key for Azure OpenAI client
+        credential = None
+        api_key = None
+        
+        if settings.AZURE_OPENAI_KEY:
+            # Use API key authentication
+            api_key = settings.AZURE_OPENAI_KEY
+            logger.debug("Using API key authentication for Azure OpenAI")
+            print(f"[AGENT_INIT] Using API key: {api_key[:20]}...")
+        else:
+            # Use managed identity/default credentials
+            credential = DefaultAzureCredential()
+            logger.debug("Using DefaultAzureCredential for Azure OpenAI")
+            print(f"[AGENT_INIT] Using DefaultAzureCredential")
+        
+        print(f"[AGENT_INIT] Creating AzureOpenAIResponsesClient with:")
+        print(f"  - endpoint: {endpoint}")
+        print(f"  - deployment_name: {model}")
+        print(f"  - api_version: {settings.AZURE_OPENAI_API_VERSION}")
+        print(f"  - credential: {credential}")
+        print(f"  - api_key: {'<set>' if api_key else '<not set>'}")
+        import sys
+        sys.stdout.flush()
+        
         # Create the ChatAgent using Azure OpenAI Responses client
         chat_client = AzureOpenAIResponsesClient(
             endpoint=endpoint,
             deployment_name=model,
-            credential=DefaultAzureCredential(),
+            credential=credential,
+            api_key=api_key,
+            api_version=settings.AZURE_OPENAI_API_VERSION,
         )
+        
+        print(f"[AGENT_INIT] AzureOpenAIResponsesClient created: {chat_client}")
+        sys.stdout.flush()
         
         # Create the ChatAgent with tools
         self.agent = chat_client.create_agent(
@@ -106,6 +137,9 @@ class DemoBaseAgent:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        
+        print(f"[AGENT_INIT] ChatAgent created: {self.agent}")
+        sys.stdout.flush()
         
         logger.info(f"Agent '{name}' initialized successfully (ID: {self.agent.id})")
     
@@ -171,14 +205,24 @@ class DemoBaseAgent:
         await self._apply_sliding_window(thread)
         
         logger.debug(f"Streaming response from agent '{self.name}'")
+        print(f"[BASE.run_stream.1] Starting run_stream, about to call self.agent.run_stream()")
+        print(f"[BASE.run_stream.1a] Message type: {type(message)}, length: {len(str(message))}")
+        print(f"[BASE.run_stream.1b] Thread: {thread}")
+        print(f"[BASE.run_stream.1c] self.agent type: {type(self.agent)}")
+        import sys
+        sys.stdout.flush()
         
         # Stream the agent response
+        print(f"[BASE.run_stream.2] About to enter async for loop on self.agent.run_stream()")
+        sys.stdout.flush()
         async for update in self.agent.run_stream(
             messages=message,
             thread=thread,
             **kwargs
         ):
+            print(f"[BASE.run_stream.3] Got update from agent: {type(update).__name__}")
             yield update
+        print(f"[BASE.run_stream.4] Stream completed")
     
     def get_new_thread(self, **kwargs: Any) -> AgentThread:
         """

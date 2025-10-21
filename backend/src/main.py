@@ -23,6 +23,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress MCP async generator cleanup error (harmless on connection close)
+asyncio_logger = logging.getLogger("asyncio")
+asyncio_logger.setLevel(logging.CRITICAL)  # Only show critical errors, filter out the generator cleanup warnings
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,11 +63,24 @@ async def lifespan(app: FastAPI):
             logger.info("Cosmos DB connected and healthy")
         else:
             logger.warning("Cosmos DB health check failed")
+        
+        # Seed default agents
+        try:
+            from src.persistence.seed_agents import seed_agents
+            seed_result = seed_agents()
+            logger.info(
+                f"Agent seeding: {seed_result['created']} created, "
+                f"{seed_result['skipped']} skipped, {seed_result['total']} total"
+            )
+        except Exception as e:
+            logger.error(f"Failed to seed agents: {e}")
+            # Continue - seeding is not critical for app functionality
     
     except Exception as e:
-        logger.error(f"Error during startup: {str(e)}")
+        logger.warning(f"Error during startup: {str(e)}")
+        logger.warning("Continuing in degraded mode - some features may use mock data")
         # In production, you might want to fail startup here
-        # For development, we'll continue with degraded functionality
+        # For development, we'll continue with mock data fallback
     
     yield
     
@@ -96,6 +113,16 @@ app.include_router(well_known_router)  # Agent card at /.well-known/agent.json
 app.include_router(a2a_router)  # A2A endpoints at /a2a
 app.include_router(agent_cards_router)  # Agent card management API at /api/agent-cards
 logger.info("A2A Protocol routers registered")
+
+# Include Chat API Router
+from src.api.chat import router as chat_router
+app.include_router(chat_router)  # Chat API at /api/agents/{agent_id}/...
+logger.info("Chat API router registered")
+
+# Include Agent Management API Router
+from src.api.agents import router as agents_router
+app.include_router(agents_router)  # Agent Management API at /api/agents
+logger.info("Agent Management API router registered")
 
 
 # Health Check Endpoint

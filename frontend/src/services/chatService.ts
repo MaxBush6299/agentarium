@@ -7,7 +7,7 @@ import { Message, ChatThread, StreamEvent } from '@/types/chat'
 import { getAccessToken } from './authService'
 import { config } from '@/config'
 
-const CHAT_ENDPOINT = '/chat'
+const CHAT_ENDPOINT = '/agents'
 
 export interface CreateChatRequest {
   agentId: string
@@ -40,13 +40,20 @@ export const streamChat = async (
       throw new Error('No access token available')
     }
 
-    const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/stream`, {
+    // Use the correct endpoint: /api/agents/{agentId}/chat
+    const endpoint = `${config.apiBaseUrl}${CHAT_ENDPOINT}/${request.agentId}/chat`
+    
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        message: request.messages[request.messages.length - 1]?.content || '',
+        thread_id: request.threadId,
+        stream: true,
+      }),
     })
 
     if (!response.ok) {
@@ -109,13 +116,13 @@ export const streamChat = async (
 /**
  * Get chat thread history
  */
-export const getChatThread = async (threadId: string): Promise<ChatThread> => {
+export const getChatThread = async (agentId: string, threadId: string): Promise<ChatThread> => {
   const token = await getAccessToken()
   if (!token) {
     throw new Error('No access token available')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/threads/${threadId}`, {
+  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads/${threadId}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -138,7 +145,7 @@ export const createChatThread = async (agentId: string): Promise<ChatThread> => 
     throw new Error('No access token available')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/threads`, {
+  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -157,13 +164,13 @@ export const createChatThread = async (agentId: string): Promise<ChatThread> => 
 /**
  * Delete chat thread
  */
-export const deleteChatThread = async (threadId: string): Promise<void> => {
+export const deleteChatThread = async (agentId: string, threadId: string): Promise<void> => {
   const token = await getAccessToken()
   if (!token) {
     throw new Error('No access token available')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/threads/${threadId}`, {
+  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads/${threadId}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -178,13 +185,13 @@ export const deleteChatThread = async (threadId: string): Promise<void> => {
 /**
  * Export chat thread as JSON
  */
-export const exportChatThread = async (threadId: string): Promise<ChatThread> => {
+export const exportChatThread = async (agentId: string, threadId: string): Promise<ChatThread> => {
   const token = await getAccessToken()
   if (!token) {
     throw new Error('No access token available')
   }
 
-  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/threads/${threadId}/export`, {
+  const response = await fetch(`${config.apiBaseUrl}${CHAT_ENDPOINT}/${agentId}/threads/${threadId}/export`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

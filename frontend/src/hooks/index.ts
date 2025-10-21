@@ -14,3 +14,6 @@ export type { UseAgentsState } from './useAgents'
 
 export { useSSE } from './useSSE'
 export type { SSEOptions } from './useSSE'
+
+export { useTraces } from './useTraces'
+export type { UseTracesReturn } from './useTraces'

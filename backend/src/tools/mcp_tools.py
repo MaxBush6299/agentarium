@@ -5,6 +5,8 @@ Provides factory functions to create MCP tool instances for use with Agent Frame
 Each function returns a configured MCP tool (Stdio, HTTP, or WebSocket) that can be passed
 directly to an agent's tools parameter.
 
+For OAuth-enabled MCP tools, see oauth_mcp_http_tool.py for production-ready token management.
+
 Usage:
     async with get_microsoft_learn_tool() as mcp_tool:
         async with ChatAgent(
@@ -14,8 +16,11 @@ Usage:
             result = await agent.run("How do I create an Azure storage account?")
 """
 
+import logging
 from typing import Optional
 from agent_framework import MCPStdioTool, MCPStreamableHTTPTool
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -132,29 +137,37 @@ def get_azure_mcp_tool(
 
 
 # =============================================================================
-# Adventure Works Database MCP Tool (Local)
+# Adventure Works Database MCP Tool (HTTP with OAuth)
 # =============================================================================
 
 def get_adventure_works_tool(
-    server_command: str = "python",
-    server_path: str = "./mcp-servers/adventure-works-mcp.py"
-) -> MCPStdioTool:
+    server_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    token_url: Optional[str] = None,
+    scope: Optional[str] = None,
+) -> MCPStreamableHTTPTool:
     """
     Create an MCP tool for Adventure Works database queries.
     
-    Provides access to the Adventure Works sample database through a local
-    MCP server running via stdio. Agents can use this to:
+    Provides access to the Adventure Works sample database through a deployed
+    MCP server using OAuth 2.0 authentication. Agents can use this to:
     - Query sales data
     - Get product information
     - Retrieve customer details
     - Generate business reports
+    - Execute SQL queries safely
     
     Args:
-        server_command: Command to run the MCP server (python, python3, etc.)
-        server_path: Path to the Adventure Works MCP server script
+        server_url: URL of the Adventure Works MCP server 
+                   (defaults to ADVENTURE_WORKS_MCP_URL from env)
+        client_id: OAuth client ID (defaults to env var)
+        client_secret: OAuth client secret (defaults to env var)
+        token_url: OAuth token endpoint (defaults to env var)
+        scope: OAuth scope (defaults to env var)
         
     Returns:
-        MCPStdioTool configured for Adventure Works database
+        MCPStreamableHTTPTool configured for Adventure Works database
         
     Example:
         ```python
@@ -171,15 +184,102 @@ def get_adventure_works_tool(
         ```
     
     Note:
-        - Requires Adventure Works MCP server to be installed
-        - Server must be executable via the specified command
-        - Database connection string configured in server script
-        - Uses stdio transport (local process communication)
+        - Uses OAuth 2.0 client credentials flow with automatic token refresh
+        - Tokens cached and refreshed automatically 5 minutes before expiration
+        - Deployed MCP server handles database connections
+        - SQL injection protection built into MCP server
+        - Read-only access to database
+        - Production-ready: handles token expiration, 401 errors, concurrent requests
     """
-    return MCPStdioTool(
-        name="Adventure Works Database",
-        command=server_command,
-        args=[server_path],
+    import os
+    from src.tools.oauth_mcp_http_tool import get_oauth_mcp_tool
+    
+    # Get configuration from environment or parameters
+    url = server_url or os.getenv("ADVENTURE_WORKS_MCP_URL", "https://mssqlmcp.azure-api.net/mcp")
+    oauth_client_id = client_id or os.getenv("ADVENTURE_WORKS_CLIENT_ID")
+    oauth_client_secret = client_secret or os.getenv("ADVENTURE_WORKS_CLIENT_SECRET")
+    oauth_token_url = token_url or os.getenv("ADVENTURE_WORKS_OAUTH_TOKEN_URL")
+    oauth_scope = scope or os.getenv("ADVENTURE_WORKS_SCOPE", "api://17a97781-0078-4478-8b4e-fe5dda9e2400/.default")
+    
+    # Configure OAuth with automatic token refresh
+    if oauth_client_id and oauth_client_secret and oauth_token_url:
+        logger.info("Creating Adventure Works MCP tool with production OAuth token management")
+        
+        # Use the production-ready OAuth MCP tool factory
+        return get_oauth_mcp_tool(
+            name="Adventure Works Database",
+            url=url,
+            token_url=oauth_token_url,
+            client_id=oauth_client_id,
+            client_secret=oauth_client_secret,
+            scope=oauth_scope,
+            refresh_buffer_seconds=300,  # Refresh 5 minutes before expiration
+        )
+    else:
+        # Fallback to no auth (for local development)
+        logger.warning("Adventure Works OAuth credentials not configured, using unauthenticated connection")
+        return MCPStreamableHTTPTool(
+            name="Adventure Works Database",
+            url=url,
+        )
+
+
+def get_mssql_tool(
+    server_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    token_url: Optional[str] = None,
+    scope: Optional[str] = None,
+) -> MCPStreamableHTTPTool:
+    """
+    Create a generic MCP tool for MSSQL database queries.
+    
+    This is a generic wrapper that connects to any MSSQL database configured
+    in the MCP server. The tool supports dynamic tool discovery, allowing agents
+    to discover available operations like list_tables, describe_table, read_data, etc.
+    
+    Configuration:
+    - Uses same environment variables as Adventure Works tool
+    - Database selection happens at the MCP server level
+    - Changing the database doesn't require agent code changes
+    
+    Args:
+        server_url: URL of the MSSQL MCP server 
+                   (defaults to ADVENTURE_WORKS_MCP_URL from env)
+        client_id: OAuth client ID (defaults to env var)
+        client_secret: OAuth client secret (defaults to env var)
+        token_url: OAuth token endpoint (defaults to env var)
+        scope: OAuth scope (defaults to env var)
+        
+    Returns:
+        MCPStreamableHTTPTool configured for MSSQL database operations
+        
+    Example:
+        ```python
+        # Create agent with MSSQL tool
+        mssql_tool = get_mssql_tool()
+        agent = SQLAgent.create()
+        
+        # Agent can discover schema and query any configured database
+        response = await agent.run("What tables are available?")
+        response = await agent.run("Describe the Sales.Customer table")
+        response = await agent.run("What are the top 10 customers?")
+        ```
+    
+    Note:
+        - Uses dynamic tool discovery for flexibility
+        - OAuth 2.0 client credentials flow for security
+        - Database-agnostic - works with any MSSQL database
+        - Read-only access enforced by MCP server
+    """
+    # Reuse the same implementation as Adventure Works tool since they connect to same server
+    # The difference is conceptual - this is database-agnostic
+    return get_adventure_works_tool(
+        server_url=server_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        token_url=token_url,
+        scope=scope,
     )
 
 

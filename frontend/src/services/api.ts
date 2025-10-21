@@ -107,3 +107,140 @@ export const apiDelete = async <T>(url: string, config?: AxiosRequestConfig): Pr
   const response = await client.delete<T>(url, config)
   return response.data
 }
+
+/**
+ * Stream chat messages using Server-Sent Events (SSE)
+ * @param agentId - The agent to chat with
+ * @param message - The user's message
+ * @param threadId - Optional thread ID for continuing a conversation
+ * @param onChunk - Callback for each content chunk
+ * @param onComplete - Callback when streaming completes
+ * @param onError - Callback for errors
+ */
+export const streamChat = async (
+  agentId: string,
+  message: string,
+  threadId: string | null,
+  onChunk: (chunk: string) => void,
+  onTraceEvent: ((event: Record<string, unknown>) => void) | ((fullMessage: string) => void),
+  onComplete?: ((fullMessage: string) => void) | ((error: Error) => void),
+  onError?: (error: Error) => void
+): Promise<void> => {
+  // Determine if we're using the new signature (7 params) or old (6 params)
+  // New: streamChat(id, msg, threadId, onChunk, onTraceEvent, onComplete, onError)
+  // Old: streamChat(id, msg, threadId, onChunk, onComplete, onError)
+  let completeCallback: ((fullMessage: string) => void) | undefined
+  let errorCallback: ((error: Error) => void) | undefined
+  let traceEventCallback: ((event: Record<string, unknown>) => void) | undefined
+
+  if (onComplete !== undefined) {
+    // New signature: 7 parameters
+    completeCallback = onComplete as (fullMessage: string) => void
+    errorCallback = onError
+    traceEventCallback = onTraceEvent as (event: Record<string, unknown>) => void
+  } else {
+    // Old signature: 6 parameters (onTraceEvent is actually onComplete, onError is undefined)
+    completeCallback = onTraceEvent as (fullMessage: string) => void
+    errorCallback = onError
+    traceEventCallback = undefined
+  }
+
+  try {
+    const token = await getAccessToken()
+    const url = `${config.apiBaseUrl}/agents/${agentId}/chat`
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        message,
+        thread_id: threadId,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullMessage = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      
+      if (done) {
+        break
+      }
+
+      // Decode chunk and add to buffer
+      buffer += decoder.decode(value, { stream: true })
+      
+      // Process complete SSE messages (split by \n\n)
+      const messages = buffer.split('\n\n')
+      buffer = messages.pop() || '' // Keep incomplete message in buffer
+
+      for (const msg of messages) {
+        if (!msg.trim()) continue
+
+        // Parse SSE format: "data: {...}"
+        const lines = msg.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6).trim()
+            
+            // Handle special events
+            if (data === '[DONE]') {
+              completeCallback?.(fullMessage)
+              return
+            }
+
+            try {
+              const parsed = JSON.parse(data)
+              
+              // Handle different event types from backend
+              // Match the actual SSE events from the backend streaming:
+              if (parsed.type === 'token' && parsed.content) {
+                const chunk = parsed.content
+                fullMessage += chunk
+                onChunk(chunk)
+              } else if (parsed.type === 'done') {
+                completeCallback?.(fullMessage)
+                return
+              } else if (parsed.type === 'error') {
+                errorCallback?.(new Error(parsed.error || 'Unknown error'))
+                return
+              } else if (parsed.type === 'trace_start' || parsed.type === 'trace_update' || parsed.type === 'trace_end') {
+                // Pass trace events to the trace event handler if provided
+                if (traceEventCallback) {
+                  traceEventCallback(parsed)
+                }
+                console.debug('Received trace event:', parsed.type)
+              } else if (parsed.type === 'heartbeat') {
+                // Ignore heartbeat events
+                console.debug('Received heartbeat')
+              }
+            } catch (e) {
+              // If not JSON, treat as plain text chunk
+              console.warn('Failed to parse SSE event:', e)
+            }
+          }
+        }
+      }
+    }
+
+    // If loop exits without [DONE], complete anyway
+    completeCallback?.(fullMessage)
+  } catch (error) {
+    errorCallback?.(error instanceof Error ? error : new Error(String(error)))
+  }
+}

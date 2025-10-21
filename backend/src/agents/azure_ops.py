@@ -101,7 +101,7 @@ class AzureOpsAgent:
     @classmethod
     def create(
         cls,
-        model: str = "gpt-4o",
+        model: Optional[str] = None,
         max_messages: int = 20,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
@@ -147,6 +147,13 @@ class AzureOpsAgent:
             )
             ```
         """
+        # Use provided model or default to "gpt-4o"
+        if model is None:
+            model = "gpt-4o"
+            print(f"[AzureOpsAgent.create] Using default model: {model}")
+        else:
+            print(f"[AzureOpsAgent.create] Using provided model: {model}")
+        
         logger.info("Creating Azure Ops Assistant Agent")
         
         # Create tools
@@ -161,22 +168,22 @@ class AzureOpsAgent:
             logger.warning(f"Could not initialize Azure MCP tool: {e}")
             # Continue - agent can work with just OpenAPI tool
         
-        try:
-            # Ops Assistant OpenAPI tool
-            ops_tool = get_ops_assistant_tool(
-                base_url=ops_api_base_url,
-                api_key=ops_api_key
-            )
-            tools.append(ops_tool)
-            logger.info("Ops Assistant API tool initialized")
-        except Exception as e:
-            logger.warning(f"Could not initialize Ops Assistant API tool: {e}")
-            # Continue if we have at least one tool
+        # TODO: Re-enable OpenAPI tools once they are available
+        # try:
+        #     # Ops Assistant OpenAPI tool
+        #     ops_tool = get_ops_assistant_tool(
+        #         base_url=ops_api_base_url,
+        #         api_key=ops_api_key
+        #     )
+        #     # get_tools() returns a list of callable functions for the agent framework
+        #     tools.extend(ops_tool.get_tools())
+        #     logger.info("Ops Assistant API tool initialized")
+        # except Exception as e:
+        #     logger.warning(f"Could not initialize Ops Assistant API tool: {e}")
+        #     # Continue if we have at least one tool
         
-        if not tools:
-            error_msg = "Failed to initialize any tools for Azure Ops Agent"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Note: Agents can work without tools for MVP testing
+        logger.info(f"Created {len(tools)} tool(s) for Azure Ops Agent")
         
         # Create base agent with tools
         base_agent = DemoBaseAgent(

@@ -12,11 +12,11 @@ import { DefaultAzureCredential, AzureCliCredential, ClientSecretCredential } fr
 import { ResourcesClient } from '@azure/arm-resources';
 import { WebSiteManagementClient } from '@azure/arm-appservice';
 import { ComputeManagementClient } from '@azure/arm-compute';
-import { ContainerInstanceManagementClient } from '@azure/arm-containerinstances';
+import { ContainerInstanceManagementClient } from '@azure/arm-containerinstance';
 import { CosmosDBManagementClient } from '@azure/arm-cosmosdb';
 import { StorageManagementClient } from '@azure/arm-storage';
 import { KeyVaultManagementClient } from '@azure/arm-keyvault';
-import { MonitorClient } from '@azure/monitor-query';
+import { LogsQueryClient } from '@azure/monitor-query';
 import fs from 'fs';
 import path from 'path';
 
@@ -82,7 +82,7 @@ const containerClient = new ContainerInstanceManagementClient(credential, { subs
 const cosmosClient = new CosmosDBManagementClient(credential, { subscriptionId });
 const storageClient = new StorageManagementClient(credential, { subscriptionId });
 const keyVaultClient = new KeyVaultManagementClient(credential, { subscriptionId });
-const monitorClient = new MonitorClient(credential);
+const logsQueryClient = new LogsQueryClient(credential);
 
 logger.info({ subscriptionId }, 'Azure clients initialized');
 

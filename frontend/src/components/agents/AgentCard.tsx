@@ -1,0 +1,210 @@
+/**
+ * Agent Card Component
+ * Displays agent information in a card format
+ */
+
+import { useNavigate } from 'react-router-dom'
+import {
+  Card,
+  CardHeader,
+  Button,
+  Badge,
+  makeStyles,
+  tokens,
+  Tooltip,
+} from '@fluentui/react-components'
+import {
+  Play24Regular,
+  Settings24Regular,
+} from '@fluentui/react-icons'
+import { Agent, AgentStatus, ToolType } from '@/types/agent'
+
+const useStyles = makeStyles({
+  card: {
+    height: '100%',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    ':hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: tokens.shadow16,
+    },
+  },
+  content: {
+    padding: '24px',
+  },
+  title: {
+    fontSize: '20px',
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: '12px',
+  },
+  description: {
+    fontSize: '14px',
+    lineHeight: '1.5',
+    color: tokens.colorNeutralForeground3,
+    marginBottom: '20px',
+    minHeight: '80px',
+  },
+  badges: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    marginBottom: '16px',
+  },
+  stats: {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '16px',
+    fontSize: '12px',
+    color: tokens.colorNeutralForeground3,
+  },
+  statItem: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  statLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  actions: {
+    display: 'flex',
+    gap: '8px',
+  },
+  tools: {
+    display: 'flex',
+    gap: '4px',
+    marginTop: '8px',
+  },
+})
+
+interface AgentCardProps {
+  agent: Agent
+}
+
+/**
+ * AgentCard Component
+ */
+export const AgentCard = ({ agent }: AgentCardProps) => {
+  const styles = useStyles()
+  const navigate = useNavigate()
+
+  const handleChat = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigate('/chat', { state: { agentId: agent.id } })
+  }
+
+  const getStatusColor = (status: AgentStatus) => {
+    switch (status) {
+      case AgentStatus.ACTIVE:
+        return 'success'
+      case AgentStatus.INACTIVE:
+        return 'subtle'
+      case AgentStatus.MAINTENANCE:
+        return 'warning'
+      default:
+        return 'subtle'
+    }
+  }
+
+  const getToolIcon = (toolType: ToolType) => {
+    switch (toolType) {
+      case ToolType.MCP:
+        return '🔌'
+      case ToolType.OPENAPI:
+        return '🌐'
+      case ToolType.A2A:
+        return '🤝'
+      case ToolType.BUILTIN:
+        return '⚙️'
+      default:
+        return '🔧'
+    }
+  }
+
+  return (
+    <Card className={styles.card}>
+      <div className={styles.content}>
+        <CardHeader
+          header={<div className={styles.title}>{agent.name}</div>}
+          description={
+            <div className={styles.badges}>
+              <Badge appearance="filled" color={getStatusColor(agent.status)}>
+                {agent.status.toUpperCase()}
+              </Badge>
+              <Badge appearance="outline">{agent.model}</Badge>
+              {!agent.isPublic && (
+                <Badge appearance="outline" color="important">
+                  Private
+                </Badge>
+              )}
+            </div>
+          }
+        />
+
+        <p className={styles.description}>{agent.description}</p>
+
+        {agent.totalRuns !== undefined && (
+          <div className={styles.stats}>
+            <div className={styles.statItem}>
+              <span className={styles.statLabel}>
+                {agent.totalRuns?.toLocaleString() || 0}
+              </span>
+              <span>Runs</span>
+            </div>
+            <div className={styles.statItem}>
+              <span className={styles.statLabel}>
+                {agent.totalTokens?.toLocaleString() || 0}
+              </span>
+              <span>Tokens</span>
+            </div>
+            {agent.avgLatencyMs && (
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>
+                  {agent.avgLatencyMs.toFixed(0)}ms
+                </span>
+                <span>Avg Latency</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {agent.tools.length > 0 && (
+          <div className={styles.tools}>
+            {agent.tools.slice(0, 5).map((tool, index) => (
+              <Tooltip
+                key={index}
+                content={`${tool.type}: ${tool.name}`}
+                relationship="label"
+              >
+                <Badge size="small" appearance="outline">
+                  {getToolIcon(tool.type)} {tool.name}
+                </Badge>
+              </Tooltip>
+            ))}
+            {agent.tools.length > 5 && (
+              <Badge size="small" appearance="outline">
+                +{agent.tools.length - 5} more
+              </Badge>
+            )}
+          </div>
+        )}
+
+        <div className={styles.actions}>
+          <Button
+            appearance="primary"
+            icon={<Play24Regular />}
+            onClick={handleChat}
+            disabled={agent.status !== AgentStatus.ACTIVE}
+          >
+            Start Chat
+          </Button>
+          <Button
+            appearance="subtle"
+            icon={<Settings24Regular />}
+            disabled={!agent.isPublic}
+          >
+            Details
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}

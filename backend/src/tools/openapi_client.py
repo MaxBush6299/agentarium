@@ -175,6 +175,21 @@ class OpenAPITool:
             for op in self.operations
         ]
     
+    def get_tools(self) -> list:
+        """Return a list of callables for agent framework. Each callable wraps an OpenAPI operation."""
+        tools = []
+        for op in self.operations:
+            def make_tool(operation):
+                async def tool_func(*args, **kwargs):
+                    parameters = kwargs.get('parameters', {})
+                    body = kwargs.get('body', None)
+                    return await self.call_operation(operation["operation_id"], parameters, body)
+                tool_func.__name__ = operation["operation_id"]
+                tool_func.__doc__ = operation["summary"]
+                return tool_func
+            tools.append(make_tool(op))
+        return tools
+    
     def __repr__(self) -> str:
         return f"OpenAPITool(title='{self.title}', operations={len(self.operations)})"
 
