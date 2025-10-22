@@ -49,6 +49,17 @@ class AgentRepository:
         agent.updated_at = datetime.utcnow()
         
         agent_dict = agent.model_dump(by_alias=True, mode='json')
+        
+        # Ensure the id field is set (Cosmos DB document ID)
+        # Don't add agentId as a separate field - it confuses Cosmos DB upsert logic
+        if 'id' not in agent_dict:
+            agent_dict['id'] = agent.id
+        
+        # Debug logging for SQL Agent
+        if agent.id == "sql-agent":
+            print(f"[AGENTS.PY] Upserting SQL Agent with {len(agent_dict.get('tools', []))} tools")
+            logger.info(f"Upserting SQL Agent with tools")
+        
         try:
             result = self.container.upsert_item(body=agent_dict)
             logger.info(f"Upserted agent: {agent.id}")
@@ -86,7 +97,11 @@ class AgentRepository:
                 logger.debug(f"Agent not found: {agent_id}")
                 return None
             
-            result = items[0]
+            if len(items) > 1:
+                # Use most recently updated document (handles duplicates gracefully)
+                result = max(items, key=lambda x: x.get('updated_at', ''))
+            else:
+                result = items[0]
             
             # Convert from Cosmos DB format
             if "_etag" in result:
@@ -119,8 +134,8 @@ class AgentRepository:
         Returns:
             List of agent metadata
         """
-        # Build query
-        query = "SELECT * FROM c WHERE 1=1"
+        # Build query - exclude custom tools (they have type='custom_tool')
+        query = "SELECT * FROM c WHERE NOT IS_DEFINED(c.type) OR c.type <> 'custom_tool'"
         parameters = []
         
         if status is not None:
@@ -170,8 +185,8 @@ class AgentRepository:
         Returns:
             Number of matching agents
         """
-        # Build query
-        query = "SELECT VALUE COUNT(1) FROM c WHERE 1=1"
+        # Build query - exclude custom tools
+        query = "SELECT VALUE COUNT(1) FROM c WHERE NOT IS_DEFINED(c.type) OR c.type <> 'custom_tool'"
         parameters = []
         
         if status is not None:
@@ -217,8 +232,14 @@ class AgentRepository:
             exceptions.CosmosHttpResponseError: If etag doesn't match (concurrent update)
         """
         # Get current agent
-        agent = self.get(agent_id)
+        try:
+            agent = self.get(agent_id)
+        except Exception as e:
+            logger.error(f"Failed to retrieve agent for update {agent_id}: {e}")
+            return None
+            
         if not agent:
+            logger.debug(f"Agent not found during update: {agent_id}")
             return None
         
         # Apply updates (only non-None fields)
@@ -233,28 +254,26 @@ class AgentRepository:
         agent_dict = agent.model_dump(by_alias=True, mode='json')
         
         try:
-            # Use etag for optimistic concurrency if provided
-            options = {}
-            if etag:
-                options["if_match"] = etag
+            # Ensure the id field is set (Cosmos DB document ID)
+            if 'id' not in agent_dict:
+                agent_dict['id'] = agent_id
             
-            result = self.container.replace_item(
-                item=agent_id,
-                body=agent_dict,
-                **options
-            )
-            
+            # Use upsert_item to persist changes
+            result = self.container.upsert_item(body=agent_dict)
             logger.info(f"Updated agent: {agent_id}")
             
             # Update with new etag
             agent.etag = result.get("_etag")
             return agent
             
-        except exceptions.CosmosResourceNotFoundError:
+        except exceptions.CosmosResourceNotFoundError as e:
             logger.debug(f"Agent not found for update: {agent_id}")
             return None
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to update agent {agent_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error updating agent {agent_id}: {type(e).__name__}: {e}")
             raise
     
     def delete(self, agent_id: str, hard_delete: bool = False) -> bool:
@@ -383,6 +402,57 @@ class AgentRepository:
             logger.info(f"Deactivated agent: {agent_id}")
             return True
         return False
+    
+    def cleanup_duplicate_agents(self):
+        """
+        Remove duplicate agents that have the same id.
+        Keeps the most recently updated version, deletes older ones.
+        """
+        try:
+            # Query all agents
+            query = "SELECT c.id, c._etag, c.updated_at FROM c ORDER BY c.id"
+            items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
+            
+            seen_ids = {}
+            to_delete = []
+            
+            for item in items:
+                agent_id = item.get('id')
+                if agent_id in seen_ids:
+                    # We have a duplicate - keep track of which to delete
+                    # Delete the older one
+                    older = seen_ids[agent_id]
+                    newer = item
+                    older_time = older.get('updated_at', '')
+                    newer_time = newer.get('updated_at', '')
+                    
+                    if older_time <= newer_time:
+                        to_delete.append(older)
+                    else:
+                        to_delete.append(newer)
+                        seen_ids[agent_id] = newer
+                else:
+                    seen_ids[agent_id] = item
+            
+            # Delete duplicates
+            for item_to_delete in to_delete:
+                try:
+                    self.container.delete_item(
+                        item=item_to_delete['id'],
+                        partition_key=item_to_delete['id']  # Use id as partition key
+                    )
+                    logger.info(f"Deleted duplicate agent: {item_to_delete['id']}")
+                except Exception as e:
+                    logger.error(f"Failed to delete duplicate {item_to_delete['id']}: {e}")
+            
+            if to_delete:
+                logger.info(f"Cleanup complete: deleted {len(to_delete)} duplicate agents")
+            else:
+                logger.info("No duplicate agents found")
+                
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            raise
 
 
 # Singleton instance

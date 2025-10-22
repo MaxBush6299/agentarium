@@ -91,21 +91,49 @@ async def get_agent_card(agent_id: str):
     """
     Get a specific agent card by ID.
     
+    Supports two modes:
+    1. Manual JSON files in storage (legacy/explicit cards)
+    2. Auto-generated cards from backend agent metadata (AgentMetadata in Cosmos DB)
+    
     Args:
         agent_id: Unique identifier for the agent
         
     Returns:
-        Agent card details
+        Agent card details (manual or auto-generated)
     """
     try:
         store = get_agent_card_store()
+        
+        # First try to get manual JSON card
         card = store.get_agent_card(agent_id)
         
         if not card:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Agent card not found: {agent_id}"
-            )
+            # Try to auto-generate from agent metadata
+            logger.debug(f"No manual card found for '{agent_id}', attempting auto-generation")
+            try:
+                from src.persistence.agents import get_agent_repository
+                repo = get_agent_repository()
+                agent_metadata = repo.get(agent_id)
+                
+                if agent_metadata:
+                    logger.info(f"Auto-generating card for agent '{agent_id}'")
+                    card = store.generate_card_from_agent_metadata(
+                        agent_metadata,
+                        base_url="http://localhost:8000"
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Agent card not found: {agent_id}"
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to auto-generate card for '{agent_id}': {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Agent card not found: {agent_id}"
+                )
         
         return AgentCardResponse(
             agent_id=agent_id,

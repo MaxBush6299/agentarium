@@ -4,8 +4,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { AgentSelector } from '../src/components/chat/AgentSelector'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { AgentSelector } from './AgentSelector'
 import * as agentsService from '@/services/agentsService'
 
 // Mock the agents service
@@ -93,6 +94,9 @@ describe('AgentSelector Component', () => {
     await waitFor(() => {
       expect(screen.getByText('Support Triage')).toBeInTheDocument()
     })
+
+    // Note: Actual click simulation would depend on Fluent UI dropdown implementation
+    // This is a simplified test
   })
 
   it('should display error message on failed fetch', async () => {
@@ -149,6 +153,7 @@ describe('AgentSelector Component', () => {
     render(<AgentSelector selectedAgentId="support-triage" onAgentChange={vi.fn()} />)
 
     await waitFor(() => {
+      // Look for active status badges
       const badges = screen.getAllByText('active')
       expect(badges.length).toBeGreaterThan(0)
     })

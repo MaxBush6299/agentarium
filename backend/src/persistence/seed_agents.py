@@ -130,41 +130,61 @@ Be precise with Azure terminology and provide CLI/PowerShell commands when helpf
             version="1.0.0"
         ),
         
-        # 3. SQL Agent (INACTIVE - Placeholder)
+        # 3. SQL Agent (ACTIVE - Adventure Works MCP)
         AgentMetadata(
             id="sql-agent",
             name="SQL Query Agent",
-            description="Helps write, optimize, and troubleshoot SQL queries. Placeholder for future development.",
-            system_prompt="""You are a SQL specialist agent. Your role is to help users write, optimize, and troubleshoot SQL queries.
+            description="Helps query and analyze the Adventure Works sample database using SQL. Access tables, schemas, write queries, and retrieve data.",
+            system_prompt="""You are a SQL specialist agent with direct access to the Adventure Works sample database.
 
 Your capabilities:
-- Write SQL queries based on natural language descriptions
-- Optimize existing queries for performance
-- Explain query execution plans
-- Suggest indexing strategies
-- Identify common SQL anti-patterns
+- Query the Adventure Works database using SQL
+- Explore database structure (tables, schemas, stored procedures)
+- Write, optimize, and troubleshoot SQL queries
+- Generate synthetic test data
+- Analyze query performance
+- Suggest indexing and optimization strategies
+- Monitor database health
 
-When helping with SQL:
-1. Understand the data schema and requirements
-2. Write clear, efficient SQL queries
-3. Explain your reasoning and approach
+When helping with SQL tasks:
+1. First explore the database structure if unfamiliar with the schema
+2. Write clear, efficient SQL queries based on user requirements
+3. Explain your approach and reasoning
 4. Provide optimization suggestions when relevant
+5. Always use WHERE clauses for UPDATE/DELETE operations
+6. Start with simple queries before complex ones
 
-Be precise with SQL syntax and follow best practices.""",
+Available tools:
+- Database schema exploration (list_table, describe_table, list_views, etc.)
+- Data operations (read_data, insert_data, update_data)
+- Performance analysis (monitor_query_performance, analyze_index_usage)
+- Health monitoring (check_database_health)
+
+Be precise with SQL syntax, follow best practices, and always verify queries before execution.""",
             model="gpt-4o",
             temperature=0.5,
             max_tokens=4000,
             max_messages=20,
-            tools=[],  # No tools configured yet
+            tools=[
+                ToolConfig(
+                    type=ToolType.MCP,
+                    name="custom-a17a64be",
+                    mcp_server_name="custom-a17a64be",
+                    config={"description": "Custom MCP tool for SQL Agent"},
+                    enabled=True
+                )
+            ],
             capabilities=[
                 "sql_generation",
                 "query_optimization",
                 "schema_analysis",
-                "performance_tuning"
+                "performance_tuning",
+                "database_exploration",
+                "data_retrieval"
             ],
             status=AgentStatus.INACTIVE,
             is_public=True,
-            version="0.1.0"
+            version="1.0.0"
         ),
         
         # 4. News Agent (INACTIVE - Placeholder)
@@ -244,10 +264,14 @@ Be analytical, data-driven, and focus on business outcomes.""",
 
 def seed_agents() -> dict:
     """
-    Seed default agents into the database.
+    Seed default agents into the database (IDEMPOTENT).
     
-    This function will upsert default agents - always update them to ensure
-    they have the latest configuration (tools, prompts, etc).
+    This function only creates agents if they don't already exist.
+    It does NOT update existing agents, allowing runtime modifications
+    (like activating agents or attaching custom tools) to persist.
+    
+    This makes seed_agents() safe to call on every startup without
+    overwriting user changes.
     
     Returns:
         Dictionary with seeding statistics:
@@ -259,6 +283,7 @@ def seed_agents() -> dict:
     agents = get_default_agents()
     
     created = 0
+    skipped = 0
     updated = 0
     
     for agent in agents:
@@ -267,15 +292,26 @@ def seed_agents() -> dict:
             existing = repo.get(agent.id)
             
             if existing:
-                logger.info(f"Agent exists, updating with latest config: {agent.id}")
-                updated += 1
+                # Special case: SQL Agent should have custom tool
+                # If it exists but has no tools, update it
+                if agent.id == "sql-agent" and len(existing.tools) == 0 and len(agent.tools) > 0:
+                    logger.info(f"SQL Agent found with missing tools, updating: {agent.id}")
+                    logger.info(f"  Previous tools: {len(existing.tools)}, New tools: {len(agent.tools)}")
+                    # Update the agent with the tools from the seed definition
+                    existing.tools = agent.tools
+                    repo.upsert(existing)
+                    logger.info(f"Updated SQL Agent with custom tool: {agent.id}")
+                    updated += 1
+                else:
+                    logger.info(f"Agent already exists, skipping (preserving runtime changes): {agent.id}")
+                    logger.info(f"  Current status: {existing.status.value}, Existing tools: {len(existing.tools)}")
+                    skipped += 1
             else:
                 logger.info(f"Agent not found, creating new: {agent.id}")
+                # Only create if doesn't exist - don't overwrite
+                repo.upsert(agent)
+                logger.info(f"Created agent: {agent.id} ({agent.name}) - Status: {agent.status.value}")
                 created += 1
-            
-            # Always upsert to ensure latest configuration
-            repo.upsert(agent)
-            logger.info(f"Upserted agent: {agent.id} ({agent.name}) - Status: {agent.status.value}")
                 
         except Exception as e:
             logger.error(f"Failed to seed agent {agent.id}: {e}")
@@ -283,11 +319,12 @@ def seed_agents() -> dict:
     
     result = {
         "created": created,
+        "skipped": skipped,
         "updated": updated,
         "total": len(agents)
     }
     
-    logger.info(f"Agent seeding complete: {created} created, {updated} updated, {len(agents)} total")
+    logger.info(f"Agent seeding complete: {created} created, {skipped} skipped, {updated} updated, {len(agents)} total")
     return result
 
 

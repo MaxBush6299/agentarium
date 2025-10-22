@@ -20,7 +20,8 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from ..agents.support_triage import SupportTriageAgent
+from ..agents.factory import AgentFactory
+from ..persistence.agents import get_agent_repository
 from ..config import get_settings
 from .agent_cards import (
     get_agent_card_store,
@@ -385,8 +386,23 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
             user_text = part.text
     
     try:
-        # Create Support Triage Agent and process message
-        agent = await SupportTriageAgent.create()
+        # Create Support Triage Agent using factory pattern from metadata
+        repo = get_agent_repository()
+        agent_metadata = repo.get("support-triage")
+        
+        if not agent_metadata:
+            raise HTTPException(
+                status_code=500,
+                detail="Support Triage Agent metadata not found"
+            )
+        
+        agent = AgentFactory.create_from_metadata(agent_metadata)
+        if not agent:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create Support Triage Agent"
+            )
+        
         response = await agent.run(user_text)
         
         # Create response message

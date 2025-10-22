@@ -132,6 +132,12 @@ export const AgentsPage = () => {
     }
   }
 
+  const handleAgentDeleted = (agentId: string) => {
+    // Remove the deleted agent from the list
+    setAgents((prev) => prev.filter((agent) => agent.id !== agentId))
+    setFilteredAgents((prev) => prev.filter((agent) => agent.id !== agentId))
+  }
+
   if (loading) {
     return (
       <div className={styles.loading}>
@@ -220,7 +226,7 @@ export const AgentsPage = () => {
       ) : (
         <div className={styles.agentsGrid}>
           {filteredAgents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} />
+            <AgentCard key={agent.id} agent={agent} onAgentDeleted={handleAgentDeleted} />
           ))}
         </div>
       )}

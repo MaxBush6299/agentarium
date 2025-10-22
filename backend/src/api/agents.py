@@ -12,7 +12,7 @@ RESTful endpoints for managing agents:
 """
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Path, Query, Depends, status as http_status
+from fastapi import APIRouter, HTTPException, Path, Query, Depends, status as http_status, Body
 from fastapi.responses import JSONResponse
 
 from src.persistence.agents import get_agent_repository
@@ -35,8 +35,11 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 def get_agent_repo():
     """Dependency to get agent repository."""
+    logger.info("[DEPENDENCY] get_agent_repo called")
     try:
-        return get_agent_repository()
+        repo = get_agent_repository()
+        logger.info(f"[DEPENDENCY] Returning repo: {repo}")
+        return repo
     except RuntimeError as e:
         # Cosmos DB not available - return None to trigger mock mode
         logger.warning(f"Agent repository not available: {e}")
@@ -58,6 +61,17 @@ async def require_admin():
     # - Check if user has "admin" role
     # - Raise HTTPException(403) if not authorized
     pass
+
+
+# ============================================================================
+# Test Endpoints
+# ============================================================================
+
+@router.put("/test-put/{agent_id}")
+def test_put(agent_id: str = Path(...)):
+    """Test PUT endpoint to verify routing."""
+    logger.info(f"[TEST PUT] Called with agent_id: {agent_id}")
+    return {"status": "ok", "agent_id": agent_id}
 
 
 # ============================================================================
@@ -251,42 +265,15 @@ def create_agent(
         )
 
 
-@router.put("/{agent_id}", response_model=AgentMetadata)
+@router.put("/{agent_id}")
 def update_agent(
-    request: AgentUpdateRequest,
     agent_id: str = Path(..., description="Agent identifier"),
-    repo = Depends(get_agent_repo),
-    _admin = Depends(require_admin)
+    request: AgentUpdateRequest = Body(...),
+    repo = Depends(get_agent_repo)
 ):
-    """
-    Update an agent's configuration. (Admin only)
+    """Update an agent's configuration."""
     
-    Path Parameters:
-    - agent_id: Agent identifier to update
-    
-    Request Body (all fields optional):
-    - name: Display name
-    - description: Agent description
-    - system_prompt: System prompt/instructions
-    - model: Azure OpenAI model name
-    - temperature: Temperature setting
-    - max_tokens: Max tokens per response
-    - max_messages: Sliding window size
-    - tools: List of tool configurations
-    - capabilities: List of capability strings
-    - is_public: Whether agent is visible to all users
-    - status: Agent status (active, inactive, maintenance)
-    
-    Returns:
-    - Updated agent metadata
-    
-    Raises:
-    - 404: Agent not found
-    - 403: Not authorized (admin only)
-    - 500: Update failed
-    """
     try:
-        # Update agent
         updated_agent = repo.update(agent_id, request)
         
         if not updated_agent:
@@ -301,7 +288,7 @@ def update_agent(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update agent {agent_id}: {e}")
+        logger.error(f"Failed to update agent {agent_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update agent"
@@ -341,10 +328,8 @@ def delete_agent(
         delete_type = "hard" if hard_delete else "soft"
         logger.info(f"{delete_type.capitalize()} deleted agent: {agent_id}")
         
-        return JSONResponse(
-            status_code=http_status.HTTP_204_NO_CONTENT,
-            content=None
-        )
+        # Return 204 No Content - don't return any response body
+        return
         
     except HTTPException:
         raise

@@ -335,3 +335,128 @@ def get_news_tool(
         url=api_url,
         headers=headers if headers else None,
     )
+
+
+# =============================================================================
+# Custom MCP Tool Factory
+# =============================================================================
+
+def get_custom_mcp_tool(
+    name: str,
+    url: str,
+    auth_type: str = "none",
+    api_key: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    token_url: Optional[str] = None,
+    scope: Optional[str] = None,
+) -> MCPStreamableHTTPTool:
+    """
+    Create a custom MCP tool with flexible authentication support.
+    
+    Allows registration of any HTTP-based MCP server with support for:
+    - No authentication
+    - API Key (header-based)
+    - OAuth 2.0 client credentials
+    
+    Args:
+        name: Display name for the custom MCP tool
+        url: URL of the MCP server endpoint
+        auth_type: Authentication type: "none", "apikey", or "oauth"
+        api_key: API key for header-based auth (required if auth_type="apikey")
+        client_id: OAuth client ID (required if auth_type="oauth")
+        client_secret: OAuth client secret (required if auth_type="oauth")
+        token_url: OAuth token endpoint (required if auth_type="oauth")
+        scope: OAuth scope (optional, defaults to standard scope)
+        
+    Returns:
+        MCPStreamableHTTPTool configured for the custom MCP server
+        
+    Example:
+        ```python
+        # No auth
+        async with get_custom_mcp_tool(
+            name="My Custom Database",
+            url="http://localhost:8001/mcp",
+            auth_type="none"
+        ) as tool:
+            async with ChatAgent(tools=tool) as agent:
+                result = await agent.run("Query my database...")
+        
+        # With API Key
+        async with get_custom_mcp_tool(
+            name="Premium API",
+            url="https://api.example.com/mcp",
+            auth_type="apikey",
+            api_key="sk-1234567890"
+        ) as tool:
+            async with ChatAgent(tools=tool) as agent:
+                result = await agent.run("Query the premium API...")
+        
+        # With OAuth
+        async with get_custom_mcp_tool(
+            name="Adventure Works",
+            url="https://mssqlmcp.azure-api.net/mcp",
+            auth_type="oauth",
+            client_id="17a97781-0078-4478-8b4e-fe5dda9e2400",
+            client_secret="Kyb8Q~FL6eva5m6pbe...",
+            token_url="https://login.microsoftonline.com/.../oauth2/v2.0/token",
+            scope="api://17a97781-0078-4478-8b4e-fe5dda9e2400/.default"
+        ) as tool:
+            async with ChatAgent(tools=tool) as agent:
+                result = await agent.run("Query Adventure Works...")
+        ```
+    
+    Note:
+        - OAuth credentials are handled securely with automatic token refresh
+        - API keys are passed in X-API-Key header
+        - All credentials should come from secure configuration (env vars, Key Vault)
+        - Production deployments should use Key Vault for credential storage
+    """
+    from src.tools.oauth_mcp_http_tool import get_oauth_mcp_tool
+    
+    logger.info(f"Creating custom MCP tool '{name}' with auth_type='{auth_type}'")
+    
+    if auth_type.lower() == "oauth":
+        if not all([client_id, client_secret, token_url]):
+            raise ValueError(
+                f"OAuth auth_type requires client_id, client_secret, and token_url. "
+                f"Got: client_id={bool(client_id)}, client_secret={bool(client_secret)}, "
+                f"token_url={bool(token_url)}"
+            )
+        
+        # Use OAuth MCP tool with automatic token management
+        return get_oauth_mcp_tool(
+            name=name,
+            url=url,
+            token_url=token_url,  # type: ignore
+            client_id=client_id,  # type: ignore
+            client_secret=client_secret,  # type: ignore
+            scope=scope or "api://default/.default",
+            refresh_buffer_seconds=300,
+        )
+    
+    elif auth_type.lower() == "apikey":
+        if not api_key:
+            raise ValueError("API Key auth_type requires api_key parameter")
+        
+        headers = {"X-API-Key": api_key}
+        return MCPStreamableHTTPTool(
+            name=name,
+            url=url,
+            headers=headers,
+        )
+    
+    elif auth_type.lower() == "none":
+        # No authentication
+        return MCPStreamableHTTPTool(
+            name=name,
+            url=url,
+        )
+    
+    else:
+        raise ValueError(
+            f"Unsupported auth_type '{auth_type}'. "
+            f"Supported values: 'none', 'apikey', 'oauth'"
+        )
+

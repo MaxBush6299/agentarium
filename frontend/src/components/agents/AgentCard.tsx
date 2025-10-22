@@ -18,6 +18,7 @@ import {
   Settings24Regular,
 } from '@fluentui/react-icons'
 import { Agent, AgentStatus, ToolType } from '@/types/agent'
+import { AgentManagementDialog } from './AgentManagementDialog'
 
 const useStyles = makeStyles({
   card: {
@@ -67,6 +68,7 @@ const useStyles = makeStyles({
   actions: {
     display: 'flex',
     gap: '8px',
+    alignItems: 'center',
   },
   tools: {
     display: 'flex',
@@ -77,12 +79,13 @@ const useStyles = makeStyles({
 
 interface AgentCardProps {
   agent: Agent
+  onAgentDeleted?: (agentId: string) => void
 }
 
 /**
  * AgentCard Component
  */
-export const AgentCard = ({ agent }: AgentCardProps) => {
+export const AgentCard = ({ agent, onAgentDeleted }: AgentCardProps) => {
   const styles = useStyles()
   const navigate = useNavigate()
 
@@ -208,6 +211,7 @@ export const AgentCard = ({ agent }: AgentCardProps) => {
           >
             Edit
           </Button>
+          <AgentManagementDialog agent={agent} onAgentDeleted={onAgentDeleted} />
         </div>
       </div>
     </Card>

@@ -77,14 +77,35 @@ async def lifespan(app: FastAPI):
             print("[MAIN.PY] Built-in tools registered successfully")
             logger.info("Built-in tools registered")
             
+            # Load custom tools from Cosmos DB (MUST complete before seeding agents)
+            try:
+                from src.api.custom_tools import load_custom_tools_from_db
+                print("[MAIN.PY] About to load custom tools from Cosmos DB...")
+                logger.info("Loading custom tools from Cosmos DB...")
+                
+                # Custom tools must be loaded BEFORE seeding agents
+                # so that agents can reference them
+                # lifespan is async, so we can await here
+                await load_custom_tools_from_db()
+                
+                print("[MAIN.PY] Custom tools loaded successfully")
+                logger.info("Custom tools loaded from Cosmos DB")
+            except Exception as e:
+                logger.warning(f"Failed to load custom tools from Cosmos DB: {e}")
+                # Continue - custom tools are optional
+            
             print(f"[MAIN.PY] About to seed agents...")
             seed_result = seed_agents()
             logger.info(
                 f"Agent seeding: {seed_result['created']} created, "
-                f"{seed_result['updated']} updated, {seed_result['total']} total"
+                f"{seed_result['skipped']} skipped, {seed_result['total']} total"
             )
             
-            # Force the backend's agent repository to refresh by doing a list query
+            # Clean up any duplicate agents
+            print("[MAIN.PY] Cleaning up duplicate agents...")
+            repo = get_agent_repository()
+            repo.cleanup_duplicate_agents()
+            print("[MAIN.PY] Duplicate agents cleanup complete")
             # This helps with Cosmos DB eventual consistency issues
             logger.info("Verifying agents are accessible from backend's client...")
             repo = get_agent_repository()
@@ -142,6 +163,16 @@ logger.info("Chat API router registered")
 from src.api.agents import router as agents_router
 app.include_router(agents_router)  # Agent Management API at /api/agents
 logger.info("Agent Management API router registered")
+
+# Include Custom Tools API Router
+from src.api.custom_tools import router as custom_tools_router
+app.include_router(custom_tools_router)  # Custom Tools API at /api/custom-tools
+logger.info("Custom Tools API router registered")
+
+# Include Models API Router
+from src.api.models import router as models_router
+app.include_router(models_router)  # Models API at /api/models
+logger.info("Models API router registered")
 
 
 # Health Check Endpoint

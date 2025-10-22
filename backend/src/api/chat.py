@@ -272,13 +272,13 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
             
             # Try non-streaming first with a timeout
             import asyncio
-            print("[6.1] About to call agent.run() with 30 second timeout...")
+            print("[6.1] About to call agent.run() with 120 second timeout...")
             sys.stdout.flush()
             
             try:
                 run_response = await asyncio.wait_for(
                     agent.run(user_message, thread=agent_thread),
-                    timeout=30.0
+                    timeout=120.0
                 )
                 print(f"[6.2] ✓ Got run_response: {type(run_response).__name__}")
                 print(f"[6.2a] Response has messages: {hasattr(run_response, 'messages')}")
@@ -451,8 +451,8 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
                     await event_gen.send_token(assistant_response)
                     
             except asyncio.TimeoutError:
-                print(f"[6.1-TIMEOUT] agent.run() timed out after 30 seconds!")
-                print(f"[6.1-TIMEOUT] This indicates the Azure OpenAI SDK is blocking on network I/O")
+                print(f"[6.1-TIMEOUT] agent.run() timed out after 120 seconds!")
+                print(f"[6.1-TIMEOUT] This indicates the Azure OpenAI SDK or MCP tools are blocking on network I/O")
                 raise
                 
         except Exception as run_error:
