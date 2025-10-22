@@ -37,6 +37,9 @@ export const AgentFormSchema = z.object({
     .min(5, 'Max messages must be at least 5')
     .max(100, 'Max messages must be less than 100')
     .default(20),
+  capabilities: z.array(z.string())
+    .default([])
+    .describe('Agent capabilities for discovery and filtering'),
   status: z.enum(['active', 'inactive', 'maintenance']).default('active'),
   tools: z.array(ToolSchema)
     .min(1, 'At least one tool must be selected'),
@@ -51,7 +54,7 @@ export type ToolData = z.infer<typeof ToolSchema>;
  */
 export const AVAILABLE_MODELS = [
   { id: 'gpt-4o', label: 'GPT-4o (Latest)' },
-  { id: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+  { id: 'gpt-4.1', label: 'GPT-4.1' },
   { id: 'gpt-4', label: 'GPT-4' },
   { id: 'gpt-35-turbo', label: 'GPT-3.5 Turbo' },
 ] as const;

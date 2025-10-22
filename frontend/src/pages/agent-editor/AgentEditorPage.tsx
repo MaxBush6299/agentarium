@@ -4,7 +4,6 @@ import {
   Stack,
   Text,
   TextField,
-  PrimaryButton,
   DefaultButton,
   Spinner,
   MessageBar,
@@ -14,7 +13,9 @@ import {
 } from '@fluentui/react';
 import { PromptEditor } from '../../components/agent-editor/PromptEditor';
 import { ToolConfigurator } from '../../components/agent-editor/ToolConfigurator';
-import { AVAILABLE_MODELS, ToolData } from './agentSchema';
+import { ModelSelector } from '../../components/agent-editor/ModelSelector';
+import { CapabilitiesEditor } from '../../components/agents/CapabilitiesEditor';
+import { ToolData } from './agentSchema';
 import '../../styles/agent-editor.css';
 
 interface AgentForm {
@@ -27,6 +28,7 @@ interface AgentForm {
   max_tokens: number;
   max_messages: number;
   status: 'active' | 'inactive' | 'maintenance';
+  capabilities: string[];
   tools: ToolData[];
 }
 
@@ -69,6 +71,7 @@ export const AgentEditorPage: React.FC = () => {
     max_tokens: 4000,
     max_messages: 20,
     status: 'active',
+    capabilities: [],
     tools: [],
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -104,6 +107,7 @@ export const AgentEditorPage: React.FC = () => {
           max_messages: agent.max_messages ?? 20,
           status: agent.status,
           tools: agent.tools || [],
+          capabilities: agent.capabilities || [],
         });
 
         setError(null);
@@ -171,6 +175,7 @@ export const AgentEditorPage: React.FC = () => {
           max_messages: formData.max_messages,
           status: formData.status,
           tools: formData.tools,
+          capabilities: formData.capabilities,
         }),
       });
 
@@ -367,16 +372,13 @@ export const AgentEditorPage: React.FC = () => {
             </div>
 
             <Stack tokens={{ childrenGap: 16 }}>
-              <Dropdown
+              <ModelSelector
+                value={formData.model}
+                onChange={(deploymentName) =>
+                  setFormData({ ...formData, model: deploymentName })
+                }
                 label="LLM Model"
-                selectedKey={formData.model}
-                onChange={(_: any, option: IDropdownOption | undefined) => {
-                  if (option) {
-                    setFormData({ ...formData, model: option.key as string });
-                  }
-                }}
-                options={AVAILABLE_MODELS.map(m => ({ key: m.id, text: m.label }))}
-                errorMessage={formErrors.model}
+                required={true}
               />
 
               <Stack horizontal tokens={{ childrenGap: 16 }}>
@@ -488,6 +490,34 @@ export const AgentEditorPage: React.FC = () => {
               selectedTools={formData.tools}
               onChange={(newTools) => setFormData({ ...formData, tools: newTools })}
               error={formErrors.tools}
+            />
+          </div>
+
+          {/* ===== CAPABILITIES ===== */}
+          <div style={{
+            padding: '24px',
+            background: '#2a2a2a',
+            borderRadius: '8px',
+            border: '1px solid #3a3a3a',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{
+                width: 4,
+                height: 20,
+                background: 'linear-gradient(135deg, #50e6ff 0%, #0078d4 100%)',
+                borderRadius: 2,
+                marginRight: 12,
+              }} />
+              <Text styles={{ root: { fontWeight: 600, color: '#ffffff', fontSize: 16 } }}>
+                Capabilities
+              </Text>
+            </div>
+            <CapabilitiesEditor
+              capabilities={formData.capabilities}
+              onChange={(newCapabilities) => setFormData({ ...formData, capabilities: newCapabilities })}
+              label="Agent Capabilities"
+              placeholder="e.g., document_retrieval, issue_triage"
+              helpText="Define capabilities to describe what this agent can do. These are used for discovery and filtering by other agents."
             />
           </div>
 
