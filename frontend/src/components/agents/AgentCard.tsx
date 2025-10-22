@@ -91,6 +91,11 @@ export const AgentCard = ({ agent }: AgentCardProps) => {
     navigate('/chat', { state: { agentId: agent.id } })
   }
 
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigate(`/agents/${agent.id}/edit`)
+  }
+
   const getStatusColor = (status: AgentStatus) => {
     switch (status) {
       case AgentStatus.ACTIVE:
@@ -199,9 +204,9 @@ export const AgentCard = ({ agent }: AgentCardProps) => {
           <Button
             appearance="subtle"
             icon={<Settings24Regular />}
-            disabled={!agent.isPublic}
+            onClick={handleEdit}
           >
-            Details
+            Edit
           </Button>
         </div>
       </div>

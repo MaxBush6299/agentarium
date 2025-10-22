@@ -1,0 +1,191 @@
+.editorPage {
+  padding: 40px;
+  max-width: 1000px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #1a1a1a 0%, #1f1f1f 100%);
+  min-height: 100vh;
+  width: 100%;
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pageHeader {
+  margin-bottom: 40px;
+  border-bottom: 2px solid #3a3a3a;
+  padding-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.pageTitle {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.pageSubtitle {
+  font-size: 14px;
+  color: #b4b4b4;
+}
+
+.formSection {
+  margin-bottom: 32px;
+  background: #252525;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid #3a3a3a;
+  transition: box-shadow 0.2s ease;
+}
+
+.formSection:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionTitle::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #0078d4 0%, #50e6ff 100%);
+  border-radius: 2px;
+}
+
+.fieldGroup {
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.fieldGroup.full {
+  grid-template-columns: 1fr;
+}
+
+.fieldGroup.triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fieldError {
+  color: #d13438;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.messageContainer {
+  margin-bottom: 24px;
+}
+
+.messageContainer > div {
+  border-radius: 6px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
+}
+
+.loadingText {
+  font-size: 16px;
+  color: #b4b4b4;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #3a3a3a;
+  justify-content: flex-end;
+}
+
+.buttonGroup button {
+  min-width: 120px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.saveButton {
+  background: linear-gradient(135deg, #0078d4 0%, #0063a0 100%);
+}
+
+.saveButton:hover {
+  background: linear-gradient(135deg, #0063a0 0%, #004578 100%);
+}
+
+.cancelButton {
+  color: #b4b4b4;
+  border: 1px solid #3a3a3a;
+}
+
+.cancelButton:hover {
+  background-color: #2f2f2f;
+}
+
+@media (max-width: 768px) {
+  .editorPage {
+    padding: 20px;
+  }
+
+  .pageTitle {
+    font-size: 24px;
+  }
+
+  .fieldGroup,
+  .fieldGroup.triple {
+    grid-template-columns: 1fr;
+  }
+
+  .buttonGroup {
+    flex-direction: column;
+  }
+
+  .buttonGroup button {
+    width: 100%;
+  }
+}

@@ -10,6 +10,7 @@ import { AppLayout } from './components/navigation/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { ChatPage } from './pages/ChatPage'
 import { AgentsPage } from './pages/AgentsPage'
+import { AgentEditorPage } from './pages/agent-editor/AgentEditorPage'
 import './styles/App.css'
 
 /**
@@ -39,6 +40,7 @@ export const App = () => {
             <Route path="chat" element={<ChatPage />} />
             <Route path="chat/:threadId" element={<ChatPage />} />
             <Route path="agents" element={<AgentsPage />} />
+            <Route path="agents/:agentId/edit" element={<AgentEditorPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

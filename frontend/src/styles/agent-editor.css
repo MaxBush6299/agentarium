@@ -1,0 +1,278 @@
+/* Agent Editor Global Styles - Dark Theme */
+
+:root {
+  --primary-color: #0078d4;
+  --primary-gradient: linear-gradient(135deg, #0078d4 0%, #50e6ff 100%);
+  --success-color: #107c10;
+  --warning-color: #ff8c00;
+  --danger-color: #d13438;
+  --border-color: #3a3a3a;
+  --background-color: #1a1a1a;
+  --surface-color: #252525;
+  --surface-hover: #2f2f2f;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-tertiary: #b8b8b8;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+  --radius: 6px;
+}
+
+/* Page Background */
+html, body {
+  background: var(--background-color);
+  color: var(--text-primary);
+}
+
+.ms-Stack[role="group"] {
+  background: linear-gradient(135deg, var(--background-color) 0%, #1f1f1f 100%);
+  min-height: 100vh;
+}
+
+/* Form Sections */
+.ms-Stack > div:has(.ms-TextField, .ms-Dropdown) {
+  background: var(--surface-color);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+  margin-bottom: 24px;
+}
+
+.ms-Stack > div:has(.ms-TextField, .ms-Dropdown):hover {
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-md);
+}
+
+/* TextField Styling */
+.ms-TextField {
+  margin-bottom: 16px;
+}
+
+.ms-TextField .ms-TextField-fieldGroup {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  background: var(--background-color);
+  transition: all 0.2s ease;
+}
+
+.ms-TextField .ms-TextField-fieldGroup:hover:not(.ms-TextField-fieldGroup--disabled) {
+  border-color: var(--primary-color);
+  background: #1f1f1f;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+}
+
+.ms-TextField .ms-TextField-fieldGroup:focus-within {
+  border-color: var(--primary-color);
+  background: #1f1f1f;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.3);
+}
+
+.ms-TextField textarea {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #ffffff;
+  background: var(--background-color);
+}
+
+.ms-TextField input {
+  color: #ffffff;
+  background: var(--background-color);
+}
+
+.ms-TextField input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Dropdown Styling */
+.ms-Dropdown {
+  margin-bottom: 16px;
+}
+
+.ms-Dropdown-container .ms-Dropdown-title {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  background: var(--background-color);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.ms-Dropdown-container .ms-Dropdown-title:hover {
+  border-color: var(--primary-color);
+  background: #1f1f1f;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+}
+
+.ms-Dropdown-callout {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+}
+
+.ms-Dropdown-item, .ms-Dropdown-optionText {
+  color: #ffffff;
+  background: var(--surface-color);
+}
+
+.ms-Dropdown-item:hover {
+  background: var(--surface-hover);
+  color: #ffffff;
+}
+
+/* Labels */
+.ms-Label {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px !important;
+}
+
+/* Error Messages */
+.ms-TextField-errorMessage {
+  color: var(--danger-color);
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* MessageBar */
+.ms-MessageBar {
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  animation: slideIn 0.3s ease;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+}
+
+.ms-MessageBar-text {
+  color: #ffffff;
+}
+
+/* Buttons */
+.ms-Button-primary {
+  background: var(--primary-gradient);
+  border: none;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 120px;
+  height: 40px;
+  color: white;
+}
+
+.ms-Button-primary:hover {
+  background: linear-gradient(135deg, #0063a0 0%, #004578 100%);
+}
+
+.ms-Button-primary:active {
+  background: linear-gradient(135deg, #004578 0%, #003a5c 100%);
+}
+
+.ms-Button-default {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 120px;
+  height: 40px;
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+  background: var(--background-color);
+}
+
+.ms-Button-default:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+}
+
+.ms-Button-default:active {
+  background: var(--surface-hover);
+  color: #ffffff;
+}
+
+/* Button Group */
+.ms-Stack > div:last-child .ms-Button {
+  margin-right: 8px;
+}
+
+/* Spinner Container */
+.ms-Spinner {
+  margin: 60px auto;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ms-TextField,
+  .ms-Dropdown {
+    width: 100% !important;
+  }
+
+  .ms-Stack-horizontal {
+    flex-direction: column !important;
+  }
+
+  .ms-Button {
+    width: 100% !important;
+    margin-bottom: 8px;
+  }
+}
+
+/* Section Headers */
+.ms-Text[style*="fontWeight: 600"] {
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Utility Classes */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.section-header::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: var(--primary-gradient);
+  border-radius: 2px;
+}
+
+/* Text Variants */
+.ms-Text--xxLarge {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 32px;
+}
+
+.ms-Text--large {
+  color: var(--text-secondary);
+}
+
+.ms-Text--medium {
+  color: var(--text-secondary);
+}
+
+.ms-Text--small {
+  color: var(--text-tertiary);
+}
