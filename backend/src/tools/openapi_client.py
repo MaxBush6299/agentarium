@@ -40,6 +40,9 @@ class OpenAPITool:
     Dynamic OpenAPI client that converts OpenAPI specs into callable tools.
     
     Supports OpenAPI 3.0 specifications and can be used with Agent Framework.
+    
+    PERFORMANCE: Spec loading is deferred until first use (lazy loading) to avoid
+    blocking tool creation. This is critical for fast agent startup.
     """
     
     def __init__(
@@ -52,6 +55,9 @@ class OpenAPITool:
     ):
         """
         Initialize OpenAPI tool from specification.
+        
+        IMPORTANT: Spec is NOT loaded during init (lazy loading for performance).
+        It will be loaded on first call to get_operations_info() or get_tools().
         
         Args:
             spec_path: Path to OpenAPI YAML file
@@ -66,17 +72,43 @@ class OpenAPITool:
         self.api_key_header = api_key_header
         self.timeout = timeout
         
-        # Load and parse spec
-        self.spec = self._load_spec()
-        self.title = self.spec.get("info", {}).get("title", "OpenAPI Tool")
-        self.version = self.spec.get("info", {}).get("version", "1.0.0")
-        
-        # Use base_url or fallback to first server in spec
-        if not self.base_url and "servers" in self.spec and self.spec["servers"]:
-            self.base_url = self.spec["servers"][0]["url"]
-        
-        # Parse operations
-        self.operations = self._parse_operations()
+        # Lazy load: spec is loaded on first access
+        self._spec: Optional[Dict[str, Any]] = None
+        self._operations: Optional[List[Dict[str, Any]]] = None
+        self._title: Optional[str] = None
+        self._version: Optional[str] = None
+    
+    @property
+    def title(self) -> str:
+        """Lazy-load title from spec on first access."""
+        if self._title is None:
+            self._title = self.spec.get("info", {}).get("title", "OpenAPI Tool")
+        return self._title
+    
+    @property
+    def version(self) -> str:
+        """Lazy-load version from spec on first access."""
+        if self._version is None:
+            self._version = self.spec.get("info", {}).get("version", "1.0.0")
+        return self._version
+    
+    @property
+    def spec(self) -> Dict[str, Any]:
+        """Lazy-load OpenAPI spec on first access."""
+        if self._spec is None:
+            self._spec = self._load_spec()
+            
+            # Use base_url or fallback to first server in spec
+            if not self.base_url and "servers" in self._spec and self._spec["servers"]:
+                self.base_url = self._spec["servers"][0]["url"]
+        return self._spec
+    
+    @property
+    def operations(self) -> List[Dict[str, Any]]:
+        """Lazy-load and cache operations from spec."""
+        if self._operations is None:
+            self._operations = self._parse_operations()
+        return self._operations
     
     def _load_spec(self) -> Dict[str, Any]:
         """Load OpenAPI specification from YAML file."""
@@ -191,7 +223,10 @@ class OpenAPITool:
         return tools
     
     def __repr__(self) -> str:
-        return f"OpenAPITool(title='{self.title}', operations={len(self.operations)})"
+        # Use property to ensure title is populated (lazy load)
+        title = self.title or "Unknown"
+        ops_count = len(self.operations)
+        return f"OpenAPITool(title='{title}', operations={ops_count})"
 
 
 # Factory functions for common APIs

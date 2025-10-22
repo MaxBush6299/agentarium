@@ -54,18 +54,18 @@ class TestChatAPIIntegration:
     
     async def test_chat_streaming_azure_ops(self, client):
         """Test streaming chat with Azure Ops agent."""
-            # Send chat request
-            response = await client.post(
-                "/api/agents/ops-assistant/chat",
-                json={
-                    "message": "List all storage accounts",
-                    "stream": True
-                },
-                timeout=60.0
-            )
-            
-            assert response.status_code == 200
-            assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+        # Send chat request
+        response = await client.post(
+            "/api/agents/ops-assistant/chat",
+            json={
+                "message": "List all storage accounts",
+                "stream": True
+            },
+            timeout=60.0
+        )
+        
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
     
     async def test_chat_invalid_agent(self):
         """Test chat with invalid agent ID."""

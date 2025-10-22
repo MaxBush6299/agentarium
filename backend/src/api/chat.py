@@ -13,13 +13,14 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 
-from src.persistence.models import ChatRequest, Thread, ThreadListResponse, Message, RunStatus, StepStatus, ToolCall, Step, StepType
+from src.persistence.models import ChatRequest, Thread, ThreadListResponse, Message, RunStatus, StepStatus, ToolCall, Step, StepType, AgentStatus
 from src.persistence.threads import get_thread_repository
 from src.persistence.runs import get_run_repository
 from src.persistence.steps import get_step_repository
+from src.persistence.agents import get_agent_repository
 from src.api.streaming import EventGenerator
-from src.agents.support_triage import SupportTriageAgent
-from src.agents.azure_ops import AzureOpsAgent
+from src.agents.factory import AgentFactory
+from src.agents.base import DemoBaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +34,77 @@ async def test_endpoint():
     return {"status": "ok", "message": "Chat API is working"}
 
 
-def get_agent(agent_id: str):
+async def get_agent(agent_id: str) -> Optional[DemoBaseAgent]:
     """
-    Get agent by ID.
-    Simplified version that creates agents directly.
+    Get agent by ID from Cosmos DB and create via factory.
+    
+    This function:
+    1. Loads agent metadata from Cosmos DB via AgentRepository
+    2. Validates agent is active and public
+    3. Creates agent using AgentFactory with graceful tool loading
+    4. Handles failures gracefully with logging
+    
+    Features:
+    - Dynamic agent loading from configuration (Cosmos DB)
+    - Lazy tool loading with per-tool error handling
+    - Graceful degradation: agent works even if tools fail
+    - No hardcoded agent classes needed
     
     Args:
-        agent_id: Agent ID
+        agent_id: Agent identifier
         
     Returns:
-        Agent instance or None
+        DemoBaseAgent instance if successful, None otherwise
     """
-    if agent_id == "support-triage":
-        return SupportTriageAgent.create()
-    elif agent_id in ["ops-assistant", "azure-ops"]:
-        return AzureOpsAgent.create()
-    # TODO: Add SQL agent, News agent, Business Impact agent
-    else:
+    try:
+        # Get agent configuration from Cosmos DB
+        logger.info(f"🔍 Attempting to load agent: {agent_id}")
+        print(f"[GET_AGENT] Loading agent: {agent_id}")
+        logger.info(f"[DEBUG] Requesting agent repository...")
+        repo = get_agent_repository()
+        logger.info(f"[DEBUG] Repository instance: {repo}")
+        logger.debug(f"Repository initialized, fetching agent from Cosmos DB")
+        
+        logger.info(f"[DEBUG] Calling repo.get('{agent_id}')...")
+        print(f"[GET_AGENT] Calling repo.get('{agent_id}')...")
+        agent_config = repo.get(agent_id)
+        print(f"[GET_AGENT] repo.get() returned: {agent_config}")
+        logger.info(f"[DEBUG] repo.get() returned: {agent_config}")
+        
+        if not agent_config:
+            logger.warning(f"❌ Agent not found in repository: {agent_id}")
+            print(f"[GET_AGENT] Agent not found in repository: {agent_id}")
+            logger.info(f"Attempting to list all agents to debug...")
+            try:
+                all_agents = repo.list()
+                logger.info(f"[DEBUG] Available agents from list(): {[(a.id, a.status) for a in all_agents]}")
+            except Exception as list_err:
+                logger.error(f"Failed to list agents: {list_err}")
+            return None
+        
+        # Check if agent is active
+        if agent_config.status != AgentStatus.ACTIVE:
+            logger.warning(f"⏸️  Agent {agent_id} is not active (status: {agent_config.status})")
+            print(f"[GET_AGENT] Agent not active: {agent_id} (status: {agent_config.status})")
+            return None
+        
+        # Create agent from metadata using factory
+        # This includes lazy tool loading with graceful failure per tool
+        print(f"[GET_AGENT] Creating agent from metadata with {len(agent_config.tools)} tools")
+        logger.info(f"Creating agent from metadata with {len(agent_config.tools)} tools")
+        agent = AgentFactory.create_from_metadata(agent_config)
+        
+        if not agent:
+            logger.error(f"❌ Failed to create agent from metadata: {agent_id}")
+            print(f"[GET_AGENT] Failed to create agent from metadata: {agent_id}")
+            return None
+        
+        print(f"[GET_AGENT] ✅ Successfully created agent '{agent_id}'")
+        logger.info(f"✅ Successfully created agent '{agent_id}' from Cosmos DB metadata")
+        return agent
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting agent {agent_id}: {type(e).__name__}: {e}", exc_info=True)
         return None
 
 
@@ -71,8 +126,8 @@ async def chat_with_agent(
     logger.info(f"Chat request for agent {agent_id}: {request.message[:50]}...")
     
     try:
-        # Get agent
-        agent = get_agent(agent_id)
+        # Get agent from Cosmos DB and create via factory
+        agent = await get_agent(agent_id)
         
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
@@ -176,54 +231,53 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
         
         # Get or create agent framework thread
         print("[3] Getting new agent thread")
-        agent_thread = agent.base_agent.get_new_thread()
+        agent_thread = agent.get_new_thread()
         print(f"[4] Agent thread created: {agent_thread}")
         print(f"[4a] Agent object: {agent}")
-        print(f"[4b] Agent.base_agent object: {agent.base_agent}")
-        print(f"[4c] Agent.base_agent.agent object: {agent.base_agent.agent}")
+        print(f"[4b] Agent.agent object: {agent.agent}")
         
         print(f"[5] Starting agent stream for message: {user_message[:50]}...")
         
         # Debug agent methods
         print("[5.1] Inspecting agent methods:")
-        print(f"[5.1a] hasattr(agent.base_agent, 'run'): {hasattr(agent.base_agent, 'run')}")
-        print(f"[5.1b] hasattr(agent.base_agent, 'run_stream'): {hasattr(agent.base_agent, 'run_stream')}")
-        print(f"[5.1c] hasattr(agent.base_agent, 'agent'): {hasattr(agent.base_agent, 'agent')}")
-        print(f"[5.1d] hasattr(agent.base_agent.agent, 'run'): {hasattr(agent.base_agent.agent, 'run')}")
-        print(f"[5.1e] hasattr(agent.base_agent.agent, 'run_stream'): {hasattr(agent.base_agent.agent, 'run_stream')}")
+        print(f"[5.1a] hasattr(agent, 'run'): {hasattr(agent, 'run')}")
+        print(f"[5.1b] hasattr(agent, 'run_stream'): {hasattr(agent, 'run_stream')}")
+        print(f"[5.1c] hasattr(agent, 'agent'): {hasattr(agent, 'agent')}")
+        print(f"[5.1d] hasattr(agent.agent, 'run'): {hasattr(agent.agent, 'run')}")
+        print(f"[5.1e] hasattr(agent.agent, 'run_stream'): {hasattr(agent.agent, 'run_stream')}")
         
         # Check run method signature
         import inspect
-        if hasattr(agent.base_agent, 'run'):
-            run_sig = inspect.signature(agent.base_agent.run)
-            print(f"[5.1f] agent.base_agent.run signature: {run_sig}")
-            print(f"[5.1g] agent.base_agent.run is coroutine? {inspect.iscoroutinefunction(agent.base_agent.run)}")
+        if hasattr(agent, 'run'):
+            run_sig = inspect.signature(agent.run)
+            print(f"[5.1f] agent.run signature: {run_sig}")
+            print(f"[5.1g] agent.run is coroutine? {inspect.iscoroutinefunction(agent.run)}")
         
-        if hasattr(agent.base_agent.agent, 'run'):
-            agent_run_sig = inspect.signature(agent.base_agent.agent.run)
-            print(f"[5.1h] agent.base_agent.agent.run signature: {agent_run_sig}")
-            print(f"[5.1i] agent.base_agent.agent.run is coroutine? {inspect.iscoroutinefunction(agent.base_agent.agent.run)}")
+        if hasattr(agent.agent, 'run'):
+            agent_run_sig = inspect.signature(agent.agent.run)
+            print(f"[5.1h] agent.agent.run signature: {agent_run_sig}")
+            print(f"[5.1i] agent.agent.run is coroutine? {inspect.iscoroutinefunction(agent.agent.run)}")
         
-        # Try calling agent.base_agent.run() first (non-streaming) to see if that works
-        print("[6] Attempting to call agent.base_agent.run() (non-streaming first)")
+        # Try calling agent.run() first (non-streaming) to see if that works
+        print("[6] Attempting to call agent.run() (non-streaming first)")
         try:
             print("[6.0] Setting up run call with timeout...")
             
             from src.config import settings
             print(f"[6.0-DEBUG] Agent info:")
-            print(f"  - Model: {agent.base_agent.model}")
-            print(f"  - Name: {agent.base_agent.name}")
+            print(f"  - Model: {agent.model}")
+            print(f"  - Name: {agent.name}")
             print(f"  - ENDPOINT: {settings.AZURE_OPENAI_ENDPOINT}")
             sys.stdout.flush()
             
             # Try non-streaming first with a timeout
             import asyncio
-            print("[6.1] About to call agent.base_agent.run() with 30 second timeout...")
+            print("[6.1] About to call agent.run() with 30 second timeout...")
             sys.stdout.flush()
             
             try:
                 run_response = await asyncio.wait_for(
-                    agent.base_agent.run(user_message, thread=agent_thread),
+                    agent.run(user_message, thread=agent_thread),
                     timeout=30.0
                 )
                 print(f"[6.2] ✓ Got run_response: {type(run_response).__name__}")
@@ -397,7 +451,7 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
                     await event_gen.send_token(assistant_response)
                     
             except asyncio.TimeoutError:
-                print(f"[6.1-TIMEOUT] agent.base_agent.run() timed out after 30 seconds!")
+                print(f"[6.1-TIMEOUT] agent.run() timed out after 30 seconds!")
                 print(f"[6.1-TIMEOUT] This indicates the Azure OpenAI SDK is blocking on network I/O")
                 raise
                 

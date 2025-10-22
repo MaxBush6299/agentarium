@@ -105,7 +105,7 @@ class Step(BaseModel):
     A step in an agent run execution.
     Represents a single action (tool call, message generation, etc.).
     """
-    id: str = Field(description="Unique step ID")
+    id: str = Field(alias="stepId", description="Unique step ID")
     run_id: str = Field(description="Parent run ID")
     thread_id: str = Field(description="Parent thread ID")
     agent_id: str = Field(description="Agent ID executing this step")
@@ -152,7 +152,7 @@ class Run(BaseModel):
     Triggered by a user message and produces an assistant response.
     """
     id: str = Field(description="Unique run ID")
-    thread_id: str = Field(description="Parent thread ID")
+    thread_id: str = Field(alias="threadId", description="Parent thread ID")
     agent_id: str = Field(description="Agent ID executing this run")
     
     status: RunStatus = Field(default=RunStatus.QUEUED, description="Run status")
@@ -212,7 +212,7 @@ class Thread(BaseModel):
     Contains message history and run history.
     """
     id: str = Field(description="Unique thread ID")
-    agent_id: str = Field(description="Agent ID for this thread")
+    agent_id: str = Field(alias="agentId", description="Agent ID for this thread")
     
     # Thread metadata
     title: Optional[str] = Field(default=None, description="Thread title (auto-generated from first message)")

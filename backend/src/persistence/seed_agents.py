@@ -52,7 +52,7 @@ Be concise, accurate, and helpful. Always cite your sources when referencing doc
             tools=[
                 ToolConfig(
                     type=ToolType.MCP,
-                    name="microsoft-docs",
+                    name="microsoft-learn",
                     mcp_server_name="microsoft-learn-mcp",
                     config={"description": "Search Microsoft Learn documentation"},
                     enabled=True
@@ -105,7 +105,7 @@ Be precise with Azure terminology and provide CLI/PowerShell commands when helpf
             tools=[
                 ToolConfig(
                     type=ToolType.MCP,
-                    name="microsoft-docs",
+                    name="microsoft-learn",
                     mcp_server_name="microsoft-learn-mcp",
                     config={"description": "Search Azure documentation"},
                     enabled=True
@@ -246,8 +246,8 @@ def seed_agents() -> dict:
     """
     Seed default agents into the database.
     
-    This function is idempotent - it will only create agents that don't exist.
-    Existing agents are not modified to preserve customizations.
+    This function will upsert default agents - always update them to ensure
+    they have the latest configuration (tools, prompts, etc).
     
     Returns:
         Dictionary with seeding statistics:
@@ -259,7 +259,7 @@ def seed_agents() -> dict:
     agents = get_default_agents()
     
     created = 0
-    skipped = 0
+    updated = 0
     
     for agent in agents:
         try:
@@ -267,13 +267,15 @@ def seed_agents() -> dict:
             existing = repo.get(agent.id)
             
             if existing:
-                logger.info(f"Agent already exists, skipping: {agent.id}")
-                skipped += 1
+                logger.info(f"Agent exists, updating with latest config: {agent.id}")
+                updated += 1
             else:
-                # Upsert new agent (create or update)
-                repo.upsert(agent)
-                logger.info(f"Upserted agent: {agent.id} ({agent.name}) - Status: {agent.status.value}")
+                logger.info(f"Agent not found, creating new: {agent.id}")
                 created += 1
+            
+            # Always upsert to ensure latest configuration
+            repo.upsert(agent)
+            logger.info(f"Upserted agent: {agent.id} ({agent.name}) - Status: {agent.status.value}")
                 
         except Exception as e:
             logger.error(f"Failed to seed agent {agent.id}: {e}")
@@ -281,11 +283,11 @@ def seed_agents() -> dict:
     
     result = {
         "created": created,
-        "skipped": skipped,
+        "updated": updated,
         "total": len(agents)
     }
     
-    logger.info(f"Agent seeding complete: {created} created, {skipped} skipped, {len(agents)} total")
+    logger.info(f"Agent seeding complete: {created} created, {updated} updated, {len(agents)} total")
     return result
 
 

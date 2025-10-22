@@ -84,6 +84,16 @@ class DemoBaseAgent:
         self.max_tokens = max_tokens
         self.temperature = temperature
         
+        print(f"[AGENT_INIT] Initializing DemoBaseAgent:")
+        print(f"  - name: {name}")
+        print(f"  - model: {model}")
+        print(f"  - tools provided: {len(tools) if tools else 0}")
+        if tools:
+            for i, tool in enumerate(tools):
+                print(f"    [{i}] {type(tool).__name__}: {tool}")
+        import sys
+        sys.stdout.flush()
+        
         # Initialize Azure OpenAI client with credentials
         from src.config import settings
         
@@ -114,7 +124,6 @@ class DemoBaseAgent:
         print(f"  - api_version: {settings.AZURE_OPENAI_API_VERSION}")
         print(f"  - credential: {credential}")
         print(f"  - api_key: {'<set>' if api_key else '<not set>'}")
-        import sys
         sys.stdout.flush()
         
         # Create the ChatAgent using Azure OpenAI Responses client
@@ -130,6 +139,8 @@ class DemoBaseAgent:
         sys.stdout.flush()
         
         # Create the ChatAgent with tools
+        print(f"[AGENT_INIT] About to create_agent with {len(tools) if tools else 0} tools")
+        sys.stdout.flush()
         self.agent = chat_client.create_agent(
             name=name,
             instructions=instructions,

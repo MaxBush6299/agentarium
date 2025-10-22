@@ -86,6 +86,7 @@ class ThreadRepository:
         """
         try:
             loop = asyncio.get_event_loop()
+            logger.debug(f"Attempting to read thread {thread_id} with partition key {agent_id}")
             item = await loop.run_in_executor(
                 _executor,
                 lambda: self.container.read_item(
@@ -93,13 +94,17 @@ class ThreadRepository:
                     partition_key=agent_id
                 )
             )
+            logger.debug(f"Successfully read thread {thread_id}: {item}")
             return Thread(**item)
             
-        except exceptions.CosmosResourceNotFoundError:
-            logger.warning(f"Thread {thread_id} not found")
+        except exceptions.CosmosResourceNotFoundError as e:
+            logger.warning(f"Thread {thread_id} not found with agent_id {agent_id}: {str(e)}")
             return None
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Error getting thread {thread_id}: {str(e)}")
+            logger.error(f"Error getting thread {thread_id}: {str(e)}", exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error getting thread {thread_id}: {str(e)}", exc_info=True)
             raise
     
     async def list(
@@ -128,7 +133,7 @@ class ThreadRepository:
             conditions = [f"c.status = '{status}'"]
             
             if agent_id:
-                conditions.append(f"c.agent_id = '{agent_id}'")
+                conditions.append(f"c.agentId = '{agent_id}'")
             if user_id:
                 conditions.append(f"c.user_id = '{user_id}'")
             

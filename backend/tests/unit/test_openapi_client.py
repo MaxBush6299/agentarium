@@ -33,6 +33,63 @@ def ops_spec_path():
 class TestOpenAPIToolInit:
     """Test OpenAPITool initialization and spec parsing."""
     
+    def test_init_lazy_loads_spec(self, support_spec_path):
+        """Test that initialization does NOT load spec (lazy loading)."""
+        # Create tool but don't access spec yet
+        tool = OpenAPITool(spec_path=support_spec_path)
+        
+        # Spec should not be loaded yet
+        assert tool._spec is None
+        assert tool._operations is None
+        assert tool._title is None
+        assert tool._version is None
+    
+    def test_spec_loaded_on_first_access(self, support_spec_path):
+        """Test that spec is loaded on first access (lazy loading)."""
+        tool = OpenAPITool(spec_path=support_spec_path)
+        
+        # Access spec via property - should trigger load
+        spec = tool.spec
+        
+        assert spec is not None
+        assert tool.title == "Support Triage API"
+        assert tool.version == "1.0.0"
+        assert tool.base_url is not None
+    
+    def test_operations_loaded_on_first_access(self, support_spec_path):
+        """Test that operations are loaded on first access."""
+        tool = OpenAPITool(spec_path=support_spec_path)
+        
+        # Operations should not be loaded yet
+        assert tool._operations is None
+        
+        # Access operations via property
+        ops = tool.operations
+        
+        assert ops is not None
+        assert len(ops) > 0
+        assert all("operation_id" in op for op in ops)
+    
+    def test_spec_cached_after_first_load(self, support_spec_path):
+        """Test that spec is cached and not reloaded."""
+        tool = OpenAPITool(spec_path=support_spec_path)
+        
+        spec1 = tool.spec
+        spec2 = tool.spec
+        
+        # Should be the exact same object (cached)
+        assert spec1 is spec2
+    
+    def test_operations_cached_after_first_load(self, support_spec_path):
+        """Test that operations are cached and not reparsed."""
+        tool = OpenAPITool(spec_path=support_spec_path)
+        
+        ops1 = tool.operations
+        ops2 = tool.operations
+        
+        # Should be the exact same object (cached)
+        assert ops1 is ops2
+    
     def test_load_support_spec(self, support_spec_path):
         """Test loading Support Triage API specification."""
         tool = OpenAPITool(spec_path=support_spec_path)
@@ -73,9 +130,15 @@ class TestOpenAPIToolInit:
         assert tool.api_key_header == "X-Custom-Key"
     
     def test_invalid_spec_path(self):
-        """Test that invalid spec path raises error."""
+        """Test that invalid spec path raises error on spec access."""
+        tool = OpenAPITool(spec_path="/nonexistent/spec.yaml")
+        
+        # Initialization should not raise
+        assert tool is not None
+        
+        # But accessing spec should raise
         with pytest.raises(FileNotFoundError):
-            OpenAPITool(spec_path="/nonexistent/spec.yaml")
+            _ = tool.spec
 
 
 class TestOpenAPIOperations:

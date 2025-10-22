@@ -62,6 +62,9 @@ class AgentRepository:
         """
         Get an agent by ID.
         
+        Uses query_items instead of read_item to avoid eventual consistency issues.
+        query_items performs a fresh database query while read_item uses cached data.
+        
         Args:
             agent_id: Agent identifier
             
@@ -69,10 +72,21 @@ class AgentRepository:
             Agent metadata or None if not found
         """
         try:
-            result = self.container.read_item(
-                item=agent_id,
-                partition_key=agent_id
-            )
+            # Use query_items for fresh database query (better consistency)
+            query = "SELECT * FROM c WHERE c.id = @id"
+            parameters = [{"name": "@id", "value": agent_id}]
+            
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True
+            ))
+            
+            if not items:
+                logger.debug(f"Agent not found: {agent_id}")
+                return None
+            
+            result = items[0]
             
             # Convert from Cosmos DB format
             if "_etag" in result:
@@ -81,10 +95,7 @@ class AgentRepository:
             agent = AgentMetadata(**result)
             logger.debug(f"Retrieved agent: {agent_id}")
             return agent
-            
-        except exceptions.CosmosResourceNotFoundError:
-            logger.debug(f"Agent not found: {agent_id}")
-            return None
+                    
         except Exception as e:
             logger.error(f"Failed to get agent {agent_id}: {e}")
             raise
@@ -391,7 +402,11 @@ def get_agent_repository() -> AgentRepository:
     global _agent_repository
     
     if _agent_repository is None:
+        print("[DEBUG agents.py] Initializing AgentRepository singleton...")
         _agent_repository = AgentRepository()
+        print(f"[DEBUG agents.py] AgentRepository initialized: {_agent_repository}")
+    else:
+        print(f"[DEBUG agents.py] Returning existing AgentRepository: {_agent_repository}")
     
     return _agent_repository
 

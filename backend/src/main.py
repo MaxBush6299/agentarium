@@ -67,11 +67,30 @@ async def lifespan(app: FastAPI):
         # Seed default agents
         try:
             from src.persistence.seed_agents import seed_agents
+            from src.persistence.agents import get_agent_repository
+            from src.agents.tool_registry import register_default_tools
+            
+            # Register all built-in tools first
+            print("[MAIN.PY] About to register built-in tools...")
+            logger.info("Registering built-in tools...")
+            register_default_tools()
+            print("[MAIN.PY] Built-in tools registered successfully")
+            logger.info("Built-in tools registered")
+            
+            print(f"[MAIN.PY] About to seed agents...")
             seed_result = seed_agents()
             logger.info(
                 f"Agent seeding: {seed_result['created']} created, "
-                f"{seed_result['skipped']} skipped, {seed_result['total']} total"
+                f"{seed_result['updated']} updated, {seed_result['total']} total"
             )
+            
+            # Force the backend's agent repository to refresh by doing a list query
+            # This helps with Cosmos DB eventual consistency issues
+            logger.info("Verifying agents are accessible from backend's client...")
+            repo = get_agent_repository()
+            all_agents = repo.list()
+            logger.info(f"Backend can see {len(all_agents)} agents: {[a.id for a in all_agents]}")
+            
         except Exception as e:
             logger.error(f"Failed to seed agents: {e}")
             # Continue - seeding is not critical for app functionality
