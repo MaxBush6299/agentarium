@@ -103,6 +103,10 @@ class DemoBaseAgent:
         
         logger.info(f"Initializing agent '{name}' with model '{model}'")
         
+        # Map model name to Azure deployment name if needed
+        deployment_name = settings.MODEL_DEPLOYMENT_MAPPING.get(model, model)
+        print(f"[AGENT_INIT] Model '{model}' mapped to deployment '{deployment_name}'")
+        
         # Prepare credential and api_key for Azure OpenAI client
         credential = None
         api_key = None
@@ -120,7 +124,7 @@ class DemoBaseAgent:
         
         print(f"[AGENT_INIT] Creating AzureOpenAIResponsesClient with:")
         print(f"  - endpoint: {endpoint}")
-        print(f"  - deployment_name: {model}")
+        print(f"  - deployment_name: {deployment_name}")
         print(f"  - api_version: {settings.AZURE_OPENAI_API_VERSION}")
         print(f"  - credential: {credential}")
         print(f"  - api_key: {'<set>' if api_key else '<not set>'}")
@@ -129,7 +133,7 @@ class DemoBaseAgent:
         # Create the ChatAgent using Azure OpenAI Responses client
         chat_client = AzureOpenAIResponsesClient(
             endpoint=endpoint,
-            deployment_name=model,
+            deployment_name=deployment_name,
             credential=credential,
             api_key=api_key,
             api_version=settings.AZURE_OPENAI_API_VERSION,
@@ -179,17 +183,115 @@ class DemoBaseAgent:
         await self._apply_sliding_window(thread)
         
         logger.debug(f"Running agent '{self.name}' with message")
+        print(f"[{self.name.upper()}_RUN] Starting agent run")
+        import sys
+        sys.stdout.flush()
         
         # Run the agent
         response = await self.agent.run(
             messages=message,
             thread=thread,
+            tool_choice="required",  # Force tool usage when tools are available
             **kwargs
         )
         
         logger.debug(f"Agent '{self.name}' completed response")
         
+        # Log any tool calls made by this agent
+        if hasattr(response, 'messages') and response.messages:
+            self._log_tool_calls_from_response(response, self.name)
+        
         return response
+    
+    def _log_tool_calls_from_response(self, response: AgentRunResponse, agent_name: str):
+        """
+        Extract and log tool calls from agent response.
+        
+        This captures tool invocations made by the agent and logs them
+        for debugging and observability.
+        
+        Args:
+            response: AgentRunResponse from agent.run()
+            agent_name: Name of the agent for logging context
+        """
+        import json
+        import sys
+        
+        tool_count = 0
+        
+        for i, msg in enumerate(response.messages):
+            msg_role = getattr(msg, 'role', None)
+            
+            # Convert Role enum to string if needed
+            if msg_role and hasattr(msg_role, 'value'):
+                role_str = str(msg_role.value)
+            else:
+                role_str = str(msg_role) if msg_role else 'unknown'
+            
+            # Look for tool calls (either in 'tool' role or in assistant message contents)
+            if role_str == 'tool':
+                # This is a tool result message
+                tool_count += 1
+                try:
+                    msg_vars = vars(msg)
+                    tool_name = 'unknown_tool'
+                    result_preview = ""
+                    
+                    # Extract tool details from contents
+                    if 'contents' in msg_vars and msg_vars['contents']:
+                        for content_item in msg_vars['contents']:
+                            content_vars = vars(content_item)
+                            
+                            # Get call_id as tool identifier
+                            if 'call_id' in content_vars:
+                                tool_name = str(content_vars['call_id'])
+                            
+                            # Extract result if available
+                            if 'result' in content_vars and isinstance(content_vars['result'], list):
+                                result_texts = []
+                                for result_item in content_vars['result']:
+                                    result_vars = vars(result_item)
+                                    if 'text' in result_vars:
+                                        result_texts.append(result_vars['text'])
+                                if result_texts:
+                                    result_preview = '\n'.join(result_texts)[:100]
+                    
+                    print(f"[{agent_name.upper()}_TOOL_CALL] Tool: {tool_name}")
+                    if result_preview:
+                        print(f"[{agent_name.upper()}_TOOL_RESULT] {result_preview}...")
+                    
+                except Exception as e:
+                    print(f"[{agent_name.upper()}_TOOL_CALL_LOG_ERROR] Error logging: {e}")
+            
+            elif role_str == 'assistant':
+                # Check assistant message for tool use blocks
+                try:
+                    msg_vars = vars(msg)
+                    if 'contents' in msg_vars and msg_vars['contents']:
+                        for content_item in msg_vars['contents']:
+                            content_vars = vars(content_item)
+                            content_type = type(content_item).__name__
+                            
+                            # Look for FunctionCallContent or similar
+                            if 'name' in content_vars and content_vars['name']:
+                                tool_count += 1
+                                tool_name = content_vars['name']
+                                args_preview = ""
+                                
+                                if 'arguments' in content_vars:
+                                    args_preview = str(content_vars['arguments'])[:50]
+                                
+                                print(f"[{agent_name.upper()}_TOOL_INVOKED] Tool: {tool_name}")
+                                if args_preview:
+                                    print(f"[{agent_name.upper()}_TOOL_ARGS] {args_preview}...")
+                
+                except Exception as e:
+                    pass
+        
+        if tool_count > 0:
+            print(f"[{agent_name.upper()}_RUN] Completed with {tool_count} tool call(s)")
+        
+        sys.stdout.flush()
     
     async def run_stream(
         self,

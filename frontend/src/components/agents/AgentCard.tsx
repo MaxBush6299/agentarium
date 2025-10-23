@@ -22,7 +22,7 @@ import { AgentManagementDialog } from './AgentManagementDialog'
 
 const useStyles = makeStyles({
   card: {
-    height: '100%',
+    height: '300px',
     cursor: 'pointer',
     transition: 'all 0.2s',
     ':hover': {

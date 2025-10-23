@@ -341,6 +341,11 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
     This method sends a message to the agent to initiate a new interaction
     or continue an existing one. Returns the task state after processing.
     
+    Supports dynamic agent routing via:
+    1. "agent_name" field in metadata
+    2. "agent" field in configuration
+    3. Fallback to support-triage for backward compatibility
+    
     Args:
         params: MessageSendParams containing the message and optional configuration
     
@@ -366,13 +371,17 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"Task {task_id} not found")
         
         # Add message to history
-        task.history.append(message)
+        if task.history is not None:
+            task.history.append(message)
         task.status.state = TaskState.WORKING
     else:
         # Create new task
         task = task_store.create_task(context_id, message)
     
     # Update task status to working
+    if task is None:
+        raise ValueError("Failed to create or retrieve task")
+    
     task.status.state = TaskState.WORKING
     task.status.timestamp = datetime.utcnow().isoformat() + "Z"
     task_store.update_task(task)
@@ -380,28 +389,47 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
     # Extract user message text
     user_text = ""
     for part in message.parts:
-        if isinstance(part, dict) and part.get("kind") == "text":
-            user_text = part.get("text", "")
-        elif hasattr(part, "text"):
-            user_text = part.text
+        if isinstance(part, dict):
+            if part.get("kind") == "text":
+                user_text = part.get("text", "")
+        else:
+            if hasattr(part, "text"):
+                text_attr = getattr(part, "text", None)
+                if text_attr:
+                    user_text = str(text_attr)
+    
+    # Extract target agent name from message metadata or configuration
+    # Metadata structure: message.metadata = {"agent_name": "sql-agent"}
+    # Configuration structure: params.config = {"agent": "sql-agent"}
+    target_agent = None
+    
+    if hasattr(message, "metadata") and message.metadata:
+        if isinstance(message.metadata, dict):
+            target_agent = message.metadata.get("agent_name") or message.metadata.get("agent")
+    
+    if not target_agent and "config" in params:
+        config = params.get("config", {})
+        if isinstance(config, dict):
+            target_agent = config.get("agent") or config.get("agent_name")
+    
+    # Fallback to support-triage for backward compatibility
+    if not target_agent:
+        target_agent = "support-triage"
+        logger.warning(f"[A2A] No agent specified in message, using fallback: {target_agent}")
+    
+    logger.info(f"[A2A] Routing message/send to agent: {target_agent}")
     
     try:
-        # Create Support Triage Agent using factory pattern from metadata
+        # Load the target agent using factory pattern from metadata
         repo = get_agent_repository()
-        agent_metadata = repo.get("support-triage")
+        agent_metadata = repo.get(target_agent)
         
         if not agent_metadata:
-            raise HTTPException(
-                status_code=500,
-                detail="Support Triage Agent metadata not found"
-            )
+            raise ValueError(f"Agent '{target_agent}' not found in repository")
         
         agent = AgentFactory.create_from_metadata(agent_metadata)
         if not agent:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to create Support Triage Agent"
-            )
+            raise ValueError(f"Failed to create agent '{target_agent}'")
         
         response = await agent.run(user_text)
         
@@ -415,7 +443,8 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
         )
         
         # Add to task history
-        task.history.append(response_message)
+        if task.history is not None:
+            task.history.append(response_message)
         
         # Create artifact with the response
         artifact = Artifact(
@@ -423,7 +452,8 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
             name="Support Triage Response",
             parts=[TextPart(text=response.messages[-1].text)]
         )
-        task.artifacts.append(artifact)
+        if task.artifacts is not None:
+            task.artifacts.append(artifact)
         
         # Update task status to completed
         task.status.state = TaskState.COMPLETED
@@ -439,7 +469,8 @@ async def handle_message_send(params: Dict[str, Any]) -> Dict[str, Any]:
             taskId=task.id,
             contextId=context_id
         )
-        task.history.append(error_message)
+        if task.history is not None:
+            task.history.append(error_message)
         task.status.state = TaskState.FAILED
         task.status.message = error_message
         task.status.timestamp = datetime.utcnow().isoformat() + "Z"

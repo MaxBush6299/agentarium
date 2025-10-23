@@ -309,6 +309,11 @@ def register_default_tools() -> None:
         print(f"[TOOL_REGISTRY] ✗ Failed to register OpenAPI tools: {e}")
         logger.warning(f"Failed to register OpenAPI tools: {e}")
     
+    # A2A tools are NOT registered here anymore
+    # Instead, specialist agents are directly passed as tools to Router Agent
+    # using agent.as_tool() pattern from Agent Framework
+    # See: factory.py load_specialist_agents_as_tools()
+    
     all_tools = registry.list_all()
     print(f"[TOOL_REGISTRY] Tool registration complete: {len(all_tools)} tools registered")
     for key, tool in all_tools.items():

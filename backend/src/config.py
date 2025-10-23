@@ -58,9 +58,16 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
     
     # Model Configuration
-    DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "gpt-4")
+    DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "gpt-4o")
     DEFAULT_TEMPERATURE: float = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
     DEFAULT_MAX_TOKENS: int = int(os.getenv("DEFAULT_MAX_TOKENS", "2048"))
+    
+    # Model to Azure Deployment Name Mapping
+    # Map model identifiers to actual Azure OpenAI deployment names
+    MODEL_DEPLOYMENT_MAPPING: dict = {
+        "gpt-4o": os.getenv("DEPLOYMENT_NAME_GPT4O", "gpt-4o"),
+        "gpt-4.1": os.getenv("DEPLOYMENT_NAME_GPT41", "gpt-4.1"),
+    }
     
     # MCP Server Configuration
     MCP_SERVERS: dict = {
