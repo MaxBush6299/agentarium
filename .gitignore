@@ -124,3 +124,7 @@ bicep.out
 # Local test files
 test-local/
 *.local.json
+
+temp-repo.git/
+temp-remove-dev-docs.git/
+dev-docs/
