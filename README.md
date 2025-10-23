@@ -150,6 +150,46 @@ The system consists of:
 - **REST API** (`src/api/agents.py`): Full CRUD operations for agent management
 - **Tool Registry** (`src/tools/registry.py`): Extensible tool loading system
 
+## How `agent_framework` is used in this codebase
+
+This project leverages the `agent_framework` (Microsoft Agent Framework) as the core runtime for building, composing, and invoking agents. Below is a concise map of where and how `agent_framework` components are used across the repo, with file references and quick notes.
+
+- `backend/src/agents/factory.py`
+  - Creates agent instances from metadata stored in Cosmos DB.
+  - Uses `agent_framework` to instantiate ChatAgent-derived agents and converts specialist agents to tools (via `.as_tool()` when composing the Router agent).
+
+- `backend/src/agents/base.py`
+  - Contains `DemoBaseAgent` / agent wrappers that adapt the `agent_framework` ChatAgent API to the app's conventions (run, run_stream, tool invocation patterns).
+
+- `backend/src/agents/handoff_router.py` and `backend/src/agents/handoff_orchestrator.py`
+  - Orchestrate multi-agent workflows. They call into agent instances produced by the factory and rely on the agent framework's thread/message APIs to detect function calls, tool results, and to preserve context across handoffs.
+  - `handoff_router` inspects `agent_thread` and `agent_thread._message_store` to extract `FunctionResultContent` / `TextContent` objects produced by the framework when tools execute.
+
+- `backend/src/tools/a2a_tools.py`
+  - Builds A2A tool wrappers that either call the Agent Framework's A2A client or directly POST to the A2A endpoint. These wrappers ensure agent-to-agent calls follow the framework's expected message format and JSON-RPC envelope.
+
+- `backend/src/api/chat.py`
+  - Streams agent responses and sends trace events. It relies on agents created from `agent_framework` to execute tools and produce messages. Trace generation reads the function call and tool-result shapes produced by the framework.
+
+- `backend/src/agents/tool_registry.py`
+  - Registers framework-dependent tools (MCP tools, OpenAPI tools, and A2A tool factories) so agents created by the factory can access them as callable tools inside the `agent_framework` execution environment.
+
+Quick patterns to be aware of:
+- Agents are constructed once by the factory and may be converted to tools using the framework's `.as_tool()` helper for composition (Router agent uses specialist agents as tools).
+- Tool execution results are stored in the agent thread message store as `FunctionResultContent` instances; those often contain lists of `TextContent` parts — extraction code must iterate them and join `.text` values.
+- A2A interactions use the framework's A2A conventions (agent card discovery + `/a2a` JSON-RPC endpoint) so remote agents behave like local tools.
+
+Try it (quick verification):
+1. Start the backend (development):
+```powershell
+cd backend/src
+python -m uvicorn src.main:app --reload
+```
+2. Create a Router agent thread and send a query that triggers a specialist. Example script included: `backend/test_tool_call_logging.py`.
+3. Watch backend logs for `FunctionCallContent` / `FunctionResultContent` messages to confirm the framework executed a tool and returned results.
+
+If you want, I can expand this section with a small diagram or a minimal code snippet showing how an agent is converted to a tool (`.as_tool()`) and invoked; tell me if you prefer that added.
+
 ### Frontend (`/frontend`)
 - **Agent Management Pages**:
   - Agent list view with filtering
