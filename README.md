@@ -6,279 +6,286 @@
 
 **A curated space for agent experiments and demos**
 
-A production-ready multi-agent AI application demonstrating advanced patterns for agent orchestration, real-time streaming, and tool integration using Microsoft's Agent Framework.
+A production-ready multi-agent AI application showcasing intelligent agent patterns with real-time streaming, comprehensive tool integration, and agent-to-agent communication. Built on Azure with Microsoft's Agent Framework, featuring a React TypeScript frontend and FastAPI backend.
 
-## 📁 Project Structure
+## ✨ Features
 
-```
-agentarium/
-├── dev-docs/                    # Development documentation & project plans
-│   ├── 01-project-plan-part1.md # Phase 1: Foundation & Architecture
-│   ├── 01-project-plan-part2.md # Phase 2: Implementation Plan
-│   ├── 01-project-plan-part3.md # Phase 3: Testing & Deployment
-│   ├── 02-architecture-part1.md # System Architecture Overview
-│   ├── 02-architecture-part2.md # Component Design & Patterns
-│   ├── 02-architecture-part3.md # Data Models & Integration
-│   └── ...                      # Additional documentation
-│
-├── infra/                       # Infrastructure as Code (Bicep)
-│   ├── main.bicep              # Main infrastructure template
-│   ├── parameters/              # Environment-specific parameters
-│   │   ├── dev.bicepparam
-│   │   └── prod.bicepparam
-│   └── modules/                # Bicep modules
-│       ├── container-apps.bicep
-│       ├── cosmos-db.bicep
-│       ├── key-vault.bicep
-│       ├── network.bicep
-│       ├── observability.bicep
-│       ├── private-endpoints.bicep
-│       └── storage.bicep
-│
-├── 01-project-plan-part1.md    # Project plan & timeline
-├── 01-project-plan-part2.md    # Implementation details
-├── 01-project-plan-part3.md    # Testing & deployment strategy
-├── 02-architecture-part1.md    # Architecture overview
-├── 02-architecture-part2.md    # Component design
-├── 02-architecture-part3.md    # Data models
-├── 03-overview.md              # Project overview
-├── .env.template               # Environment variables template
-└── README.md                   # This file
-```
-
-## 🎯 Project Goals
-
-- Build a production-ready multi-agent AI system
-- Demonstrate real-time streaming with trace visualization
-- Integrate multiple tool types (MCP, OpenAPI, A2A protocols)
-- Deploy to Azure with full observability
-
-## 📚 Documentation
-
-All project documentation is in the `dev-docs/` folder:
-
-- **Project Plans**: Phase 1, 2, and 3 timelines and deliverables
-- **Architecture**: System design, component patterns, and integration flows
-- **Development**: Setup guides, API specifications, and best practices
+- **🤖 Multi-Agent Orchestration**: Handoff router pattern with specialized agents for support triage, sales, and Azure operations
+- **⚡ Real-Time Streaming**: Server-Sent Events (SSE) for live agent responses with tool execution tracing
+- **🔧 Extensible Tool Integration**:
+  - Model Context Protocol (MCP) servers for Azure resources
+  - Custom MSSQL MCP tool integration (see [adventure-mcp](https://github.com/MaxBush6299/adventure-mcp))
+  - OpenAPI specification support
+  - Agent-to-Agent (A2A) protocol for inter-agent communication
+- **📊 Trace Visualization**: Real-time view of tool calls, inputs, and outputs during agent execution
+- **🎨 Modern UI**: React TypeScript with Fluent UI components and MSAL authentication
+- **☁️ Azure Native**: Deployed on Azure Container Apps with Cosmos DB, Application Insights, and Key Vault
 
 ## 🏗️ Architecture
 
-The system consists of:
+### Frontend (`/frontend`)
+React TypeScript application with:
+- **Chat Interface**: Interactive conversation with agents, streaming responses
+- **Agent Management**: Browse available agents and their capabilities
+- **Trace Panel**: Real-time visualization of tool execution (inputs, outputs, timing)
+- **Authentication**: Azure Entra ID (MSAL) integration
+- **Tech Stack**: Vite, React Router, Fluent UI v9, react-markdown
 
-- **Backend**: FastAPI with real-time streaming support
-- **Frontend**: React TypeScript with MSAL authentication
-- **Infrastructure**: Azure-hosted with Cosmos DB, OpenAI, and observability
+### Backend (`/backend`)
+FastAPI application powered by Microsoft Agent Framework:
+- **Agent Factory**: Dynamic agent creation from Cosmos DB metadata
+- **Handoff Router**: Orchestrates conversations between specialized agents
+- **Tool Registry**: Extensible system for MCP, OpenAPI, and A2A tools
+- **Streaming API**: SSE endpoints for real-time responses with trace events
+- **Persistence**: Cosmos DB for agent configurations and chat history
+- **Tech Stack**: FastAPI, Azure SDK, semantic-kernel patterns
 
-## 🚀 Quick Start
+### Infrastructure (`/infra`)
+Azure Bicep templates for complete infrastructure:
+- **Container Apps**: Scalable hosting for frontend, backend, and MCP sidecar
+- **Cosmos DB**: NoSQL database for agent metadata and conversations
+- **Application Insights**: Distributed tracing and telemetry
+- **Key Vault**: Secure storage for API keys and connection strings
+- **Container Registry**: Private registry for Docker images
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 20+
-- Docker & Docker Compose
-- Azure CLI
-- Git
+- **Azure Subscription**: For deploying infrastructure
+- **Azure OpenAI**: Deployed models (GPT-4, GPT-4o recommended)
+- **Local Development**:
+  - Python 3.11+
+  - Node.js 20+
+  - Docker & Docker Compose
+  - Azure CLI
 
-### Setup
+### Quick Start
 
-1. **Clone and navigate to project**
+1. **Clone the repository**
    ```bash
    git clone https://github.com/MaxBush6299/agentarium.git
    cd agentarium
    ```
 
-2. **Review documentation**
-   ```bash
-   # Start with these docs in dev-docs/ folder
-   - Read 01-project-plan-part1.md for overview
-   - Read 02-architecture-part1.md for system design
-   ```
-
-3. **Deploy infrastructure** (when ready)
+2. **Deploy Azure Infrastructure**
    ```bash
    az login
-   az deployment sub create \
-     --template-file infra/main.bicep \
-     --parameters infra/parameters/dev.bicepparam
+   cd infra
+   
+   # Create resource group
+   az group create --name rg-agentarium-dev --location westus
+   
+   # Deploy infrastructure
+   az deployment group create \
+     --resource-group rg-agentarium-dev \
+     --template-file main.bicep \
+     --parameters @parameters/dev.bicepparam
    ```
 
-## 📖 Key Documentation Files
+3. **Configure Backend**
+   ```bash
+   cd ../backend
+   
+   # Copy environment template
+   cp .env.template .env
+   
+   # Edit .env with your Azure resources:
+   # - AZURE_OPENAI_ENDPOINT
+   # - AZURE_OPENAI_API_KEY
+   # - COSMOS_DB_ENDPOINT
+   # - COSMOS_DB_KEY
+   ```
 
-| File | Purpose |
-|------|---------|
-| `dev-docs/01-project-plan-*.md` | Project timeline, phases, and deliverables |
-| `dev-docs/02-architecture-*.md` | System design, components, and patterns |
-| `03-overview.md` | High-level project overview |
-| `infra/README.md` | Infrastructure deployment guide |
+4. **Run Backend Locally**
+   ```bash
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Start server
+   cd src
+   python -m uvicorn main:app --reload
+   ```
 
-## 🔧 Technology Stack
+5. **Run Frontend Locally**
+   ```bash
+   cd ../frontend
+   
+   # Install dependencies
+   npm install
+   
+   # Configure environment
+   cp .env.template .env.local
+   # Edit .env.local with your backend URL and Entra ID settings
+   
+   # Start development server
+   npm run dev
+   ```
 
-- **Backend**: Python, FastAPI, Cosmos DB
-- **Frontend**: React, TypeScript, Vite
-- **Infrastructure**: Azure, Bicep, Docker
-- **AI/ML**: Azure OpenAI, LangChain patterns
-- **DevOps**: GitHub Actions, Azure Container Registry
+6. **Access Application**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
 
-## 📊 Project Status
+### Docker Compose (Alternative)
 
-**Phase 1** (Complete): Infrastructure as Code ✅
-- Bicep templates for all Azure resources
-- Parameter files for dev/prod environments
-- Network and security configuration
+Run both frontend and backend with Docker:
 
-**Phase 2** (In Progress): Agent Implementation & Core Features
-- ✅ Backend FastAPI scaffolding with streaming support
-- ✅ Frontend React TypeScript with agent management UI
-- ✅ Tool integration framework (MCP, OpenAPI, A2A protocols)
-- ✅ **Agent Factory Pattern**: Dynamic agent creation from metadata
-- ✅ **Auto-Card Generation**: A2A protocol cards auto-generated from agent metadata
-- ✅ **Cosmos DB Persistence**: Agent configurations stored and retrieved reliably
-- ✅ **User-Defined Capabilities**: Agents can be tagged with custom capabilities
-- ✅ **Capabilities Editor UI**: Full React component for managing agent capabilities (FluentUI v5)
-- ✅ **Agent Lifecycle**: Complete create/read/update/delete flows for agents
-- ✅ **Tool Management**: UI for configuring agent tools and parameters
-
-**Phase 3** (Planned): Testing & Deployment
-- CI/CD pipelines
-- Load testing
-- Production deployment
-- Advanced observability and tracing
-
-## 🎯 Key Features Implemented
-
-### Backend (`/backend`)
-- **AgentFactory** (`src/agents/factory.py`): Dynamic agent instantiation from metadata
-- **AgentRepository**: Cosmos DB persistence layer for agent configurations
-- **A2A Protocol** (`src/a2a/`): Auto-generating agent discovery cards with:
-  - Automatic tool-to-skill mapping
-  - User-defined capabilities in metadata
-  - Combined endpoint for multi-agent discovery
-  - Graceful fallback from manual cards to auto-generation
-- **REST API** (`src/api/agents.py`): Full CRUD operations for agent management
-- **Tool Registry** (`src/tools/registry.py`): Extensible tool loading system
-
-## How `agent_framework` is used in this codebase
-
-This project leverages the `agent_framework` (Microsoft Agent Framework) as the core runtime for building, composing, and invoking agents. Below is a concise map of where and how `agent_framework` components are used across the repo, with file references and quick notes.
-
-- `backend/src/agents/factory.py`
-  - Creates agent instances from metadata stored in Cosmos DB.
-  - Uses `agent_framework` to instantiate ChatAgent-derived agents and converts specialist agents to tools (via `.as_tool()` when composing the Router agent).
-
-- `backend/src/agents/base.py`
-  - Contains `DemoBaseAgent` / agent wrappers that adapt the `agent_framework` ChatAgent API to the app's conventions (run, run_stream, tool invocation patterns).
-
-- `backend/src/agents/handoff_router.py` and `backend/src/agents/handoff_orchestrator.py`
-  - Orchestrate multi-agent workflows. They call into agent instances produced by the factory and rely on the agent framework's thread/message APIs to detect function calls, tool results, and to preserve context across handoffs.
-  - `handoff_router` inspects `agent_thread` and `agent_thread._message_store` to extract `FunctionResultContent` / `TextContent` objects produced by the framework when tools execute.
-
-- `backend/src/tools/a2a_tools.py`
-  - Builds A2A tool wrappers that either call the Agent Framework's A2A client or directly POST to the A2A endpoint. These wrappers ensure agent-to-agent calls follow the framework's expected message format and JSON-RPC envelope.
-
-- `backend/src/api/chat.py`
-  - Streams agent responses and sends trace events. It relies on agents created from `agent_framework` to execute tools and produce messages. Trace generation reads the function call and tool-result shapes produced by the framework.
-
-- `backend/src/agents/tool_registry.py`
-  - Registers framework-dependent tools (MCP tools, OpenAPI tools, and A2A tool factories) so agents created by the factory can access them as callable tools inside the `agent_framework` execution environment.
-
-Quick patterns to be aware of:
-- Agents are constructed once by the factory and may be converted to tools using the framework's `.as_tool()` helper for composition (Router agent uses specialist agents as tools).
-- Tool execution results are stored in the agent thread message store as `FunctionResultContent` instances; those often contain lists of `TextContent` parts — extraction code must iterate them and join `.text` values.
-- A2A interactions use the framework's A2A conventions (agent card discovery + `/a2a` JSON-RPC endpoint) so remote agents behave like local tools.
-
-Try it (quick verification):
-1. Start the backend (development):
-```powershell
-cd backend/src
-python -m uvicorn src.main:app --reload
+```bash
+docker-compose up --build
 ```
-2. Create a Router agent thread and send a query that triggers a specialist. Example script included: `backend/test_tool_call_logging.py`.
-3. Watch backend logs for `FunctionCallContent` / `FunctionResultContent` messages to confirm the framework executed a tool and returned results.
 
-If you want, I can expand this section with a small diagram or a minimal code snippet showing how an agent is converted to a tool (`.as_tool()`) and invoked; tell me if you prefer that added.
+## 🔧 Creating Custom MCP Tools
 
-### Frontend (`/frontend`)
-- **Agent Management Pages**:
-  - Agent list view with filtering
-  - Agent detail/edit view with full configuration
-  - Agent creation workflow
-- **CapabilitiesEditor Component** (`src/components/agents/CapabilitiesEditor.tsx`):
-  - Add/remove capabilities with tag UI
-  - Input validation and duplicate prevention
-  - Fully integrated with react-hook-form
-- **ToolConfigurator Component**: Manage agent tools and parameters
-- **Form Validation**: Zod schemas ensuring data integrity
-- **Real-time Persistence**: Changes saved immediately to backend
+Agentarium supports Model Context Protocol (MCP) servers for extending agent capabilities. See the **[adventure-mcp](https://github.com/MaxBush6299/adventure-mcp)** repository for a complete example of building a custom MSSQL MCP tool.
 
-### Infrastructure (`/infra`)
-- Bicep templates for complete Azure deployment
-- Cosmos DB for reliable persistence
-- Container Apps for scalable deployment
-- Key Vault for secrets management
-- Full network security configuration
+### Example: MSSQL MCP Tool
 
-## 🧪 Testing
+The adventure-mcp project demonstrates:
+- MCP server implementation for SQL Server database access
+- OAuth authentication with Azure Entra ID
+- Tool schema definitions for database queries
+- Integration with Agent Framework
 
-All major features have been tested and verified:
-- ✅ Agent creation and persistence across server restarts
-- ✅ User-defined capabilities persist to Cosmos DB
-- ✅ Capabilities editor component (add/remove with validation)
-- ✅ A2A card auto-generation from agent metadata
-- ✅ Full CRUD operations via REST API
-- ✅ Frontend form submission and data loading
-- ✅ Capabilities integrated into agent edit workflow
-- ✅ Custom tool registration and persistence
-- ✅ Dynamic model selection via API
-- ✅ Agent configuration changes survive restarts
+To add your own MCP tool:
 
-## 📋 Recent Implementation
+1. **Create MCP Server** (see adventure-mcp for template)
+2. **Register in `backend/src/tools/mcp_tools.py`**:
+   ```python
+   mcp_client = MCPClient(
+       server_path="node",
+       server_args=["/path/to/your-mcp-server/server.js"],
+       config_path="/path/to/config.json"
+   )
+   ```
+3. **Add to Agent Configuration** in Cosmos DB or via API
 
-### Phase 3.6: User-Defined Capabilities (Latest)
-- ✅ **CapabilitiesEditor Component** - FluentUI-based UI for managing agent capabilities
-  - Add new capabilities with input field + button
-  - Remove capabilities with tag dismissal
-  - Input validation (no empty, no duplicates)
-  - Enter key support for quick addition
-  - Full form integration with react-hook-form
+## 🤝 How Agent Framework is Used
 
-- ✅ **Capabilities Integration** - Complete workflow
-  - Load capabilities when editing existing agent
-  - Include capabilities in PUT request to backend
-  - Capabilities persist to Cosmos DB
-  - Capabilities returned in API responses
+This project is built on [Microsoft Agent Framework](https://github.com/microsoft/semantic-kernel), providing:
 
-- ✅ **A2A Protocol Support** - Capabilities exposed for discovery
-  - Included in combined agent card metadata
-  - Visible in agent skills as tags
-  - Enables inter-agent capability discovery
+- **ChatAgent Base**: All agents inherit from `agent_framework.ChatAgent`
+- **Tool Composition**: Specialist agents converted to tools via `.as_tool()` for router composition
+- **Thread Management**: Agent threads maintain conversation context across handoffs
+- **Function Calling**: Framework handles tool invocation, result extraction, and message history
 
-### Phase 3.5: Model Library & Agent Persistence (Previous)
-- ✅ **Custom Tool Persistence** - Tools stored in Cosmos DB
-- ✅ **Agent Update Persistence** - Fixed Cosmos DB update operations
-- ✅ **Dynamic Model Selection** - REST API for querying available deployments
-- ✅ **ModelSelector Component** - React component with automatic model loading
+**Key Integration Points:**
+- `backend/src/agents/factory.py` - Dynamic agent instantiation from metadata
+- `backend/src/agents/handoff_router.py` - Multi-agent orchestration with thread management
+- `backend/src/tools/` - MCP, OpenAPI, and A2A tool adapters
+- `backend/src/api/chat.py` - Streaming responses with trace extraction from framework messages
+
+## 📁 Project Structure
+
+## 📁 Project Structure
+
+```
+agentarium/
+├── frontend/                    # React TypeScript UI
+│   ├── src/
+│   │   ├── components/         # React components (chat, agents, trace panel)
+│   │   ├── pages/             # Page components (home, chat, agents)
+│   │   ├── services/          # API client and utilities
+│   │   └── config.ts          # Frontend configuration
+│   ├── Dockerfile
+│   └── package.json
+│
+├── backend/                     # FastAPI application
+│   ├── src/
+│   │   ├── agents/            # Agent implementations and factory
+│   │   ├── tools/             # MCP, OpenAPI, A2A tool integrations
+│   │   ├── api/               # REST API endpoints
+│   │   ├── persistence/       # Cosmos DB repositories
+│   │   ├── a2a/               # Agent-to-Agent protocol
+│   │   └── main.py            # Application entry point
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── mcp-server/                  # Azure MCP server sidecar
+│   ├── server.js              # MCP server implementation
+│   ├── config/                # Server configurations
+│   └── Dockerfile
+│
+├── infra/                       # Azure Bicep templates
+│   ├── main.bicep             # Main infrastructure template
+│   ├── modules/               # Reusable Bicep modules
+│   │   ├── container-apps.bicep
+│   │   ├── cosmos-db.bicep
+│   │   ├── key-vault.bicep
+│   │   └── observability.bicep
+│   └── parameters/            # Environment-specific parameters
+│
+└── images/                      # Logo and favicon assets
+```
+
+## � Key Technologies
+
+| Component | Technologies |
+|-----------|-------------|
+| **Frontend** | React 18, TypeScript, Vite, Fluent UI v9, React Router, MSAL |
+| **Backend** | Python 3.11, FastAPI, Azure SDK, Microsoft Agent Framework |
+| **Database** | Azure Cosmos DB (NoSQL) |
+| **AI/ML** | Azure OpenAI (GPT-4, GPT-4o), semantic-kernel patterns |
+| **Infrastructure** | Azure Container Apps, Application Insights, Key Vault, ACR |
+| **DevOps** | Docker, Azure CLI, GitHub Actions (optional) |
+
+## 🧪 Sample Agents
+
+Agentarium includes several pre-configured agents:
+
+### 🎯 Handoff Router Agent
+- **Purpose**: Orchestrates conversations and routes to specialist agents
+- **Tools**: All specialist agents (as tools), web search, general utilities
+- **Model**: GPT-4o
+
+### � Support Triage Agent
+- **Purpose**: Analyzes support tickets and routes to appropriate teams
+- **Tools**: Ticket system API, knowledge base search
+- **Model**: GPT-4
+
+### 💰 Sales Agent
+- **Purpose**: Provides product information and sales data
+- **Tools**: MSSQL MCP tool (via adventure-mcp), product catalog API
+- **Model**: GPT-4
+
+### ☁️ Azure Operations Agent
+- **Purpose**: Manages Azure resources and provides operational insights
+- **Tools**: Azure MCP server (App Services, VMs, Cosmos DB, Storage)
+- **Model**: GPT-4o
+
+## 🎨 Screenshots & Demo
+
+*(Add screenshots of your chat interface, trace panel, and agent management UI here)*
+
+## 📚 Additional Resources
+
+- **Development Documentation**: See `/dev-docs` for architecture decisions and implementation details
+- **Custom MCP Tools**: [adventure-mcp repository](https://github.com/MaxBush6299/adventure-mcp)
+- **Microsoft Agent Framework**: [GitHub repository](https://github.com/microsoft/semantic-kernel)
+- **Azure OpenAI**: [Service documentation](https://learn.microsoft.com/azure/ai-services/openai/)
 
 ## 🤝 Contributing
 
-1. Create a feature branch: `git checkout -b feature/your-feature`
-2. Make changes and commit: `git commit -m "feat: description"`
-3. Push to GitHub: `git push origin feature/your-feature`
-4. Create a Pull Request
+Contributions are welcome! Please:
 
-### Development Guidelines
-- Follow the patterns established in existing code
-- Test capabilities through the UI
-- Update documentation for new features
-- Ensure backend and frontend changes are consistent
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📝 License
 
-[Add your license here]
+This project is available under the MIT License. See LICENSE file for details.
 
-## 📞 Support
+## 🙏 Acknowledgments
 
-For questions or issues, refer to the documentation in `dev-docs/` or create a GitHub issue.
+- **Microsoft Agent Framework** for the agent runtime and patterns
+- **Azure OpenAI** for LLM capabilities
+- **Fluent UI** for the component library
+- Community contributors and testers
 
 ---
 
-**Repository**: https://github.com/MaxBush6299/multiagentdemo  
-**Status**: Phase 1 Complete, Phase 2 In Progress (Agent Factory, Auto-Card Generation, Capabilities Management ✅)
+**Live Demo**: *(Add your deployed URL here)*  
+**Repository**: https://github.com/MaxBush6299/agentarium  
+**Questions?** Open an issue or check `/dev-docs` for detailed documentation
