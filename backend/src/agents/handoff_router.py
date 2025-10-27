@@ -68,40 +68,52 @@ class HandoffRouter:
     
     # Specialist agent metadata
     SPECIALIST_DOMAINS = {
-        "sql-agent": {
-            "name": "SQL Agent",
+        "sales-agent": {
+            "name": "Sales Agent",
             "keywords": [
-                "database", "table", "query", "sql", "schema", "data",
-                "columns", "records", "rows", "select", "insert", "update",
-                "delete", "join", "where", "aggregate", "group", "order",
-                "view", "index", "constraint", "relationship"
+                "customer", "order", "sales", "revenue", "invoice", "account",
+                "salesperson", "buying", "payment", "client", "purchase history",
+                "customer relationship", "sales performance", "order history",
+                "billing", "transaction", "customer lifetime value"
             ]
         },
-        "azure-ops": {
-            "name": "Azure Operations Agent",
+        "warehouse-agent": {
+            "name": "Warehouse Agent",
             "keywords": [
-                "azure", "deployment", "infrastructure", "resource", "virtual",
-                "machine", "app service", "database", "storage", "function",
-                "cosmosdb", "aks", "container", "registry", "devops", "pipeline",
-                "scaling", "monitoring", "performance", "health"
+                "inventory", "stock", "warehouse", "reorder", "supply", "bin",
+                "units", "available", "quantity", "stock level", "stock movement",
+                "holding", "stocktake", "item location", "picking", "fulfillment"
             ]
         },
-        "support-triage": {
-            "name": "Support Triage Agent",
+        "purchasing-agent": {
+            "name": "Purchasing Agent",
             "keywords": [
-                "ticket", "issue", "problem", "support", "help", "error",
-                "bug", "complaint", "urgent", "critical", "severity",
-                "category", "priority", "escalate", "resolve", "troubleshoot",
-                "help desk", "customer service", "incident"
+                "supplier", "purchase order", "procurement", "vendor", "lead time",
+                "delivery", "buying", "sourcing", "purchase", "po", "vendor management",
+                "supplier performance", "cost", "pricing", "quote"
             ]
         },
-        "data-analytics": {
-            "name": "Data Analytics Agent",
+        "customer-service-agent": {
+            "name": "Customer Service Agent",
             "keywords": [
-                "analytics", "analysis", "trend", "insight", "report",
-                "metric", "kpi", "dashboard", "visualization", "chart",
-                "forecast", "prediction", "aggregate", "summarize", "business",
-                "intelligence", "performance", "statistics", "data", "visualization"
+                "track", "where is", "status", "help", "support", "issue",
+                "problem", "inquiry", "customer service", "complaint", "question",
+                "assistance", "find", "locate", "check on"
+            ]
+        },
+        "finance-agent": {
+            "name": "Finance Agent",
+            "keywords": [
+                "payment", "invoice due", "credit", "balance", "overdue", "financial",
+                "transaction", "owed", "pay", "outstanding", "accounts receivable",
+                "accounts payable", "ar", "ap", "credit limit", "aging"
+            ]
+        },
+        "microsoft-docs": {
+            "name": "Microsoft Docs Agent",
+            "keywords": [
+                "microsoft", "documentation", "docs", "how to", "tutorial", "api",
+                "reference", "learn", "guide", "manual", "instructions", "example"
             ]
         }
     }
@@ -259,12 +271,22 @@ class HandoffRouter:
                 # Build message with context (for multi-turn conversations)
                 full_message = (context_prefix + "\n\n" + current_message) if context_prefix else current_message
                 
-                # Run specialist agent
+                # Run specialist agent with timeout
                 try:
                     logger.info(f"[HANDOFF-TURN-{turn}] Executing {target_agent_id}.run()")
                     print(f"[HANDOFF-TURN-{turn}] Executing {target_agent_id}.run()")
                     
-                    response = await specialist_agent.run(full_message, thread=agent_thread)
+                    # Add timeout to prevent hanging
+                    import asyncio
+                    try:
+                        response = await asyncio.wait_for(
+                            specialist_agent.run(full_message, thread=agent_thread),
+                            timeout=120.0  # 120 second timeout (2 minutes for complex queries with tools)
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"[HANDOFF-TURN-{turn}] Agent {target_agent_id} timed out after 120 seconds")
+                        print(f"[HANDOFF-TURN-{turn}] ⏱️ TIMEOUT: Agent {target_agent_id} took too long to respond")
+                        return f"I'm sorry, the {target_agent_id} took too long to respond. Please try again.", target_agent_id, []
                     
                     logger.info(f"[HANDOFF-TURN-{turn}] Got response from {target_agent_id}")
                     print(f"[HANDOFF-TURN-{turn}] Got response from {target_agent_id}")
@@ -566,6 +588,9 @@ class HandoffRouter:
                                         print(f"[_extract_tool_calls]         Text preview: {text_preview}")
                         
                         # Find tool result messages and match them to tool calls
+                        # Track which tool calls have been filled
+                        next_unfilled_idx = 0
+                        
                         for msg in messages:
                             role = getattr(msg, 'role', None)
                             if role is not None:
@@ -576,73 +601,80 @@ class HandoffRouter:
                                 
                                 if role_str == 'tool':
                                     if hasattr(msg, 'contents') and msg.contents:
+                                        # Process each result content in order
                                         for content in msg.contents:
                                             content_type = type(content).__name__
+                                            
+                                            # Find next tool call without output
+                                            while next_unfilled_idx < len(tool_calls) and 'output' in tool_calls[next_unfilled_idx]:
+                                                next_unfilled_idx += 1
+                                            
+                                            if next_unfilled_idx >= len(tool_calls):
+                                                print(f"[_extract_tool_calls] WARNING: More results than tool calls!")
+                                                break
                                             
                                             # Handle FunctionResultContent (new format)
                                             if content_type == 'FunctionResultContent':
                                                 # Extract the result from FunctionResultContent
                                                 result_data = getattr(content, 'result', None)
                                                 
-                                                # Update last tool call with result
-                                                if tool_calls and 'output' not in tool_calls[-1]:
-                                                    # Handle different result types
-                                                    result_text = ""
-                                                    
-                                                    if isinstance(result_data, str):
-                                                        # Plain string result
-                                                        result_text = result_data
-                                                    elif isinstance(result_data, list):
-                                                        # List of content objects (e.g., TextContent)
-                                                        text_parts = []
-                                                        for item in result_data:
-                                                            if hasattr(item, 'text'):
-                                                                text_parts.append(str(item.text))
-                                                            elif isinstance(item, str):
-                                                                text_parts.append(item)
-                                                            else:
-                                                                text_parts.append(str(item))
-                                                        result_text = "".join(text_parts)
-                                                    elif hasattr(result_data, 'text'):
-                                                        # Single TextContent object - extract text
-                                                        result_text = str(getattr(result_data, 'text', ''))
-                                                    elif isinstance(result_data, dict):
-                                                        # Dictionary result - convert to JSON
-                                                        import json
-                                                        result_text = json.dumps(result_data)
-                                                    elif result_data is not None:
-                                                        # Other object - convert to string
-                                                        result_text = str(result_data)
-                                                    
-                                                    tool_calls[-1]['output'] = result_text
-                                                    try:
-                                                        import json
-                                                        if isinstance(result_data, dict):
-                                                            tool_calls[-1]['output_parsed'] = result_data
+                                                # Handle different result types
+                                                result_text = ""
+                                                
+                                                if isinstance(result_data, str):
+                                                    # Plain string result
+                                                    result_text = result_data
+                                                elif isinstance(result_data, list):
+                                                    # List of content objects (e.g., TextContent)
+                                                    text_parts = []
+                                                    for item in result_data:
+                                                        if hasattr(item, 'text'):
+                                                            text_parts.append(str(item.text))
+                                                        elif isinstance(item, str):
+                                                            text_parts.append(item)
                                                         else:
-                                                            parsed = json.loads(result_text) if result_text else None
-                                                            if parsed:
-                                                                tool_calls[-1]['output_parsed'] = parsed
-                                                        print(f"[_extract_tool_calls] Added parsed result from FunctionResultContent")
-                                                    except Exception as e:
-                                                        print(f"[_extract_tool_calls] Could not parse result as JSON: {e}")
-                                                    print(f"[_extract_tool_calls] Added result from message_store (FunctionResultContent): {len(result_text)} chars")
+                                                            text_parts.append(str(item))
+                                                    result_text = "".join(text_parts)
+                                                elif hasattr(result_data, 'text'):
+                                                    # Single TextContent object - extract text
+                                                    result_text = str(getattr(result_data, 'text', ''))
+                                                elif isinstance(result_data, dict):
+                                                    # Dictionary result - convert to JSON
+                                                    import json
+                                                    result_text = json.dumps(result_data)
+                                                elif result_data is not None:
+                                                    # Other object - convert to string
+                                                    result_text = str(result_data)
+                                                
+                                                tool_calls[next_unfilled_idx]['output'] = result_text
+                                                try:
+                                                    import json
+                                                    if isinstance(result_data, dict):
+                                                        tool_calls[next_unfilled_idx]['output_parsed'] = result_data
+                                                    else:
+                                                        parsed = json.loads(result_text) if result_text else None
+                                                        if parsed:
+                                                            tool_calls[next_unfilled_idx]['output_parsed'] = parsed
+                                                    print(f"[_extract_tool_calls] Added parsed result to tool {next_unfilled_idx} ({tool_calls[next_unfilled_idx]['name']})")
+                                                except Exception as e:
+                                                    print(f"[_extract_tool_calls] Could not parse result as JSON: {e}")
+                                                print(f"[_extract_tool_calls] Added result to tool {next_unfilled_idx} ({tool_calls[next_unfilled_idx]['name']}): {len(result_text)} chars")
+                                                next_unfilled_idx += 1
                                             
                                             # Handle TextContent (old format fallback)
                                             elif content_type == 'TextContent':
                                                 result_text = getattr(content, 'text', '')
                                                 
-                                                # Update last tool call with result
-                                                if tool_calls and 'output' not in tool_calls[-1]:
-                                                    tool_calls[-1]['output'] = result_text
-                                                    try:
-                                                        import json
-                                                        parsed = json.loads(result_text)
-                                                        tool_calls[-1]['output_parsed'] = parsed
-                                                        print(f"[_extract_tool_calls] Added parsed result from TextContent")
-                                                    except:
-                                                        pass
-                                                    print(f"[_extract_tool_calls] Added result from message_store (TextContent): {len(result_text)} chars")
+                                                tool_calls[next_unfilled_idx]['output'] = result_text
+                                                try:
+                                                    import json
+                                                    parsed = json.loads(result_text)
+                                                    tool_calls[next_unfilled_idx]['output_parsed'] = parsed
+                                                    print(f"[_extract_tool_calls] Added parsed result to tool {next_unfilled_idx} ({tool_calls[next_unfilled_idx]['name']})")
+                                                except:
+                                                    pass
+                                                print(f"[_extract_tool_calls] Added result to tool {next_unfilled_idx} ({tool_calls[next_unfilled_idx]['name']}): {len(result_text)} chars")
+                                                next_unfilled_idx += 1
             except Exception as e:
                 print(f"[_extract_tool_calls] Error accessing message_store: {e}")
         

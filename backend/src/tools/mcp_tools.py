@@ -232,24 +232,22 @@ def get_mssql_tool(
     scope: Optional[str] = None,
 ) -> MCPStreamableHTTPTool:
     """
-    Create a generic MCP tool for MSSQL database queries.
+    Create an MCP tool for MSSQL database queries (Wide World Importers).
     
-    This is a generic wrapper that connects to any MSSQL database configured
-    in the MCP server. The tool supports dynamic tool discovery, allowing agents
-    to discover available operations like list_tables, describe_table, read_data, etc.
-    
-    Configuration:
-    - Uses same environment variables as Adventure Works tool
-    - Database selection happens at the MCP server level
-    - Changing the database doesn't require agent code changes
+    Provides access to Wide World Importers DW database through OAuth-secured MCP server.
+    Agents can use this to:
+    - Query sales, customer, warehouse, purchasing data
+    - Discover database schema (tables, columns)
+    - Execute safe read-only SQL queries
+    - Generate business intelligence reports
     
     Args:
         server_url: URL of the MSSQL MCP server 
-                   (defaults to ADVENTURE_WORKS_MCP_URL from env)
-        client_id: OAuth client ID (defaults to env var)
-        client_secret: OAuth client secret (defaults to env var)
-        token_url: OAuth token endpoint (defaults to env var)
-        scope: OAuth scope (defaults to env var)
+                   (defaults to MSSQL_MCP_URL from env)
+        client_id: OAuth client ID (defaults to MSSQL_CLIENT_ID from env)
+        client_secret: OAuth client secret (defaults to MSSQL_CLIENT_SECRET from env)
+        token_url: OAuth token endpoint (defaults to MSSQL_OAUTH_TOKEN_URL from env)
+        scope: OAuth scope (defaults to MSSQL_SCOPE from env)
         
     Returns:
         MCPStreamableHTTPTool configured for MSSQL database operations
@@ -258,29 +256,75 @@ def get_mssql_tool(
         ```python
         # Create agent with MSSQL tool
         mssql_tool = get_mssql_tool()
-        agent = SQLAgent.create()
+        agent = ChatAgent(
+            chat_client=client,
+            name="Sales Agent",
+            instructions="You analyze Wide World Importers sales data.",
+            tools=[mssql_tool]
+        )
         
-        # Agent can discover schema and query any configured database
+        # Agent can discover schema and query database
         response = await agent.run("What tables are available?")
-        response = await agent.run("Describe the Sales.Customer table")
-        response = await agent.run("What are the top 10 customers?")
+        response = await agent.run("Who are the top 5 customers by revenue?")
         ```
     
     Note:
-        - Uses dynamic tool discovery for flexibility
-        - OAuth 2.0 client credentials flow for security
-        - Database-agnostic - works with any MSSQL database
+        - Uses OAuth 2.0 client credentials flow
+        - Token acquired fresh on each tool creation (valid for 1 hour)
         - Read-only access enforced by MCP server
+        - Works with Wide World Importers DW database
     """
-    # Reuse the same implementation as Adventure Works tool since they connect to same server
-    # The difference is conceptual - this is database-agnostic
-    return get_adventure_works_tool(
-        server_url=server_url,
-        client_id=client_id,
-        client_secret=client_secret,
-        token_url=token_url,
-        scope=scope,
-    )
+    import os
+    from src.utils.oauth_token_manager import get_token_manager
+    
+    # Get configuration from environment or parameters
+    # Use MSSQL_* environment variables (for Wide World Importers)
+    url = server_url or os.getenv("MSSQL_MCP_URL", "https://mssqlmcp.azure-api.net/mcp")
+    oauth_client_id = client_id or os.getenv("MSSQL_CLIENT_ID")
+    oauth_client_secret = client_secret or os.getenv("MSSQL_CLIENT_SECRET")
+    oauth_token_url = token_url or os.getenv("MSSQL_OAUTH_TOKEN_URL")
+    oauth_scope = scope or os.getenv("MSSQL_SCOPE", "api://17a97781-0078-4478-8b4e-fe5dda9e2400/.default")
+    
+    # Get configuration from environment or parameters
+    # Use MSSQL_* environment variables (for Wide World Importers)
+    url = server_url or os.getenv("MSSQL_MCP_URL", "https://mssqlmcp.azure-api.net/mcp")
+    oauth_client_id = client_id or os.getenv("MSSQL_CLIENT_ID")
+    oauth_client_secret = client_secret or os.getenv("MSSQL_CLIENT_SECRET")
+    oauth_token_url = token_url or os.getenv("MSSQL_OAUTH_TOKEN_URL")
+    oauth_scope = scope or os.getenv("MSSQL_SCOPE", "api://17a97781-0078-4478-8b4e-fe5dda9e2400/.default")
+    
+    # Use actual MSSQL MCP with OAuth
+    if oauth_client_id and oauth_client_secret and oauth_token_url:
+        logger.info("Creating MSSQL MCP tool with OAuth")
+        
+        # Get token manager and fetch token
+        token_manager = get_token_manager(
+            token_url=oauth_token_url,
+            client_id=oauth_client_id,
+            client_secret=oauth_client_secret,
+            scope=oauth_scope,
+            refresh_buffer_seconds=300,
+        )
+        
+        # Get fresh token (will be cached by token manager)
+        token = token_manager.get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        logger.info("MSSQL MCP tool created with OAuth token")
+        
+        # Return tool directly with token (same pattern as Microsoft Learn)
+        return MCPStreamableHTTPTool(
+            name="MSSQL MCP",
+            url=url,
+            headers=headers,
+        )
+    else:
+        # Fallback to no auth
+        logger.warning("MSSQL OAuth credentials not configured, using unauthenticated connection")
+        return MCPStreamableHTTPTool(
+            name="MSSQL MCP",
+            url=url,
+        )
 
 
 # =============================================================================

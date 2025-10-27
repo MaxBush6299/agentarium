@@ -230,6 +230,7 @@ def register_default_tools() -> None:
         from src.tools.mcp_tools import (
             get_microsoft_learn_tool,
             get_azure_mcp_tool,
+            get_mssql_tool,
         )
         print("[TOOL_REGISTRY] ✓ MCP tools imported successfully")
         
@@ -260,6 +261,24 @@ def register_default_tools() -> None:
             }
         ))
         print("[TOOL_REGISTRY] ✓ azure-mcp tool registered")
+        
+        # MSSQL MCP Tool (Wide World Importers with OAuth)
+        print("[TOOL_REGISTRY] Registering mssql-mcp tool...")
+        registry.register(ToolDefinition(
+            type="mcp",
+            name="mssql-mcp",
+            description="Query Wide World Importers database via OAuth-secured MCP server",
+            factory=lambda cfg: get_mssql_tool(),
+            required_config={},
+            optional_config={
+                "server_url": "MSSQL MCP server URL",
+                "client_id": "OAuth client ID",
+                "client_secret": "OAuth client secret",
+                "token_url": "OAuth token endpoint",
+                "scope": "OAuth scope"
+            }
+        ))
+        print("[TOOL_REGISTRY] ✓ mssql-mcp tool registered")
         
         logger.info("✓ Registered MCP tools")
     except Exception as e:
