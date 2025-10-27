@@ -1,6 +1,6 @@
-# Agent Framework Backend
+# Agentarium Backend
 
-FastAPI backend for the AI Agent Framework Demo. Provides REST API endpoints for agent management, chat sessions, and tool integration.
+FastAPI backend for Agentarium. Provides REST API endpoints for agent management, chat sessions, and tool integration.
 
 ## Project Structure
 

@@ -31,6 +31,12 @@ const useStyles = makeStyles({
     textAlign: 'center',
     marginBottom: '48px',
   },
+  logo: {
+    width: '400px',
+    height: 'auto',
+    marginBottom: '24px',
+    marginTop: '24px',
+  },
   title: {
     fontSize: '48px',
     fontWeight: tokens.fontWeightSemibold,
@@ -86,10 +92,11 @@ export const HomePage = () => {
   return (
     <div className={styles.container}>
       <div className={styles.hero}>
-        <h1 className={styles.title}>Welcome to Agent Framework</h1>
+        <img src="/logo.jpg" alt="Agentarium Logo" className={styles.logo} />
+        <h1 className={styles.title}>Welcome to Agentarium</h1>
         <p className={styles.subtitle}>
-          An intelligent multi-agent system powered by Azure OpenAI, featuring
-          real-time streaming, tracing, and agent-to-agent communication.
+          A curated space for agent experiments and demos. Explore intelligent multi-agent patterns 
+          powered by Azure OpenAI, featuring real-time streaming, tracing, and agent-to-agent communication.
         </p>
       </div>
 

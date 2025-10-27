@@ -1,7 +1,7 @@
 {
-  "name": "@agentdemo/mcp-server-azure",
+  "name": "@agentarium/mcp-server-azure",
   "version": "0.1.0",
-  "description": "Azure MCP Server sidecar for Agent Demo - provides Azure resource access via Model Context Protocol",
+  "description": "Azure MCP Server sidecar for Agentarium - provides Azure resource access via Model Context Protocol",
   "main": "server.js",
   "type": "module",
   "engines": {

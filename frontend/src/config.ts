@@ -19,7 +19,7 @@ export const config = {
   
   // Application Configuration
   app: {
-    name: 'Agent Framework Demo',
+    name: 'Agentarium',
     version: '0.1.0',
     environment: import.meta.env.MODE || 'development',
   },

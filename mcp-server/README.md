@@ -1,4 +1,4 @@
-# Azure MCP Server - Agent Demo
+# Azure MCP Server - Agentarium
 
 Model Context Protocol (MCP) server for Azure resource access. Enables LLM agents to discover and interact with Azure resources including App Services, Virtual Machines, Cosmos DB, Storage Accounts, Key Vaults, and more.
 

@@ -1,6 +1,6 @@
-# Agent Demo - Frontend
+# Agentarium - Frontend
 
-React + TypeScript + Vite frontend application for the Agent Demo platform.
+React + TypeScript + Vite frontend application for Agentarium.
 
 ## Overview
 

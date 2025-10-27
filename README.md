@@ -1,11 +1,17 @@
-# AI Agents Demo - Multi-Agent LLM Application
+# Agentarium
 
-A production-ready multi-agent AI application demonstrating advanced patterns for agent orchestration, real-time streaming, and tool integration.
+<p align="center">
+  <img src="images/logo.jpg" alt="Agentarium Logo" width="300"/>
+</p>
+
+**A curated space for agent experiments and demos**
+
+A production-ready multi-agent AI application demonstrating advanced patterns for agent orchestration, real-time streaming, and tool integration using Microsoft's Agent Framework.
 
 ## 📁 Project Structure
 
 ```
-agent-demo/
+agentarium/
 ├── dev-docs/                    # Development documentation & project plans
 │   ├── 01-project-plan-part1.md # Phase 1: Foundation & Architecture
 │   ├── 01-project-plan-part2.md # Phase 2: Implementation Plan
@@ -76,8 +82,8 @@ The system consists of:
 
 1. **Clone and navigate to project**
    ```bash
-   git clone https://github.com/MaxBush6299/multiagentdemo.git
-   cd multiagentdemo
+   git clone https://github.com/MaxBush6299/agentarium.git
+   cd agentarium
    ```
 
 2. **Review documentation**

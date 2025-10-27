@@ -71,7 +71,7 @@ export const AppLayout = () => {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <div className={styles.title}>🤖 Agent Framework Demo</div>
+        <div className={styles.title}>🤖 Agentarium</div>
         <nav className={styles.nav}>
           <TabList
             selectedValue={getSelectedTab()}
