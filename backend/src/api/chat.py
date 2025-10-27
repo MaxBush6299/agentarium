@@ -305,6 +305,10 @@ async def stream_handoff_response(thread: Thread, run, user_message: str):
                 tool_name = tool_call.get('name', 'unknown_tool')
                 tool_id = f"tool_call_{i+1}"
                 
+                # DEBUG: Show full tool_call structure
+                print(f"[HANDOFF-TRACE] Tool call #{i+1} structure: {tool_call.keys()}")
+                print(f"[HANDOFF-TRACE] Tool call full dict: {tool_call}")
+                
                 # Get input and output
                 tool_input = tool_call.get('input', tool_call.get('arguments', {}))
                 tool_output = tool_call.get('output', tool_call.get('result', ''))

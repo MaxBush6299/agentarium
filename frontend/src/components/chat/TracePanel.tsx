@@ -255,10 +255,17 @@ const TraceItem: React.FC<TraceItemProps> = ({ trace, depth, isStreaming }) => {
 
   // Extract request and result from input
   const getRequestData = () => {
-    if (trace.input && typeof trace.input === 'object' && 'request' in trace.input) {
+    if (!trace.input || typeof trace.input !== 'object') {
+      return null
+    }
+    
+    // If input has a nested 'request' property, use that (MCP tool format)
+    if ('request' in trace.input) {
       return (trace.input as Record<string, unknown>).request as Record<string, unknown>
     }
-    return null
+    
+    // Otherwise, use the input directly (handoff router format)
+    return trace.input as Record<string, unknown>
   }
 
   const getResultData = () => {
