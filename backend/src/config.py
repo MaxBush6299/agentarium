@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    ALLOWED_ORIGINS: list[str] = [FRONTEND_URL]
     
     # Azure Configuration
     AZURE_SUBSCRIPTION_ID: str = os.getenv("AZURE_SUBSCRIPTION_ID", "")
@@ -110,6 +109,11 @@ class Settings(BaseSettings):
     ENABLE_TELEMETRY_SAMPLING: bool = os.getenv("ENABLE_TELEMETRY_SAMPLING", "true").lower() == "true"
     ENABLE_A2A_PROTOCOL: bool = os.getenv("ENABLE_A2A_PROTOCOL", "true").lower() == "true"
     ENABLE_TOOL_CACHING: bool = os.getenv("ENABLE_TOOL_CACHING", "true").lower() == "true"
+    
+    @property
+    def ALLOWED_ORIGINS(self) -> list[str]:
+        """Compute allowed origins from FRONTEND_URL."""
+        return [self.FRONTEND_URL]
     
     class Config:
         case_sensitive = True

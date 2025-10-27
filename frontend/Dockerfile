@@ -1,46 +1,51 @@
 # Frontend Multi-stage Build
+# React/Vite application with nginx serving
 
-# Build stage
-FROM node:20-alpine AS builder
+# ===== Build Stage =====
+FROM node:20 AS builder
+
+ARG VITE_API_URL=http://localhost:8000/api
+ENV VITE_API_URL=$VITE_API_URL
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
 
-# Build application
-RUN npm run build
+# Ensure node_modules/.bin is executable
+RUN chmod -R +x /app/node_modules/.bin
 
-# Runtime stage
-FROM node:20-alpine
+# Build React/Vite application with environment variable
+RUN VITE_API_URL=$VITE_API_URL npx vite build
 
-WORKDIR /app
+# Verify build output exists
+RUN test -d dist || (echo "Build failed: dist directory not found" && exit 1)
 
-# Install serve to run the static build
-RUN npm install -g serve
+# ===== Runtime Stage =====
+# Use lightweight nginx image for serving static files
+FROM nginx:alpine
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
 
-# Copy built application from builder
-COPY --from=builder --chown=appuser:appuser /app/dist ./dist
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Switch to non-root user
-USER appuser
+# Copy built application from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Expose port
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Serve static files
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

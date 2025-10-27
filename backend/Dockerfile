@@ -32,7 +32,9 @@ ENV PYTHONUNBUFFERED=1
 
 # Copy application code
 COPY src/ ./src/
-COPY .env.template .env.local ./
+
+# Copy env file if it exists (optional for runtime)
+COPY .env* ./
 
 # Set ownership to appuser
 RUN chown -R appuser:appuser /app

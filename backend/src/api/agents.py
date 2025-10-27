@@ -80,7 +80,7 @@ def test_put(agent_id: str = Path(...)):
 
 @router.get("", response_model=AgentListResponse)
 def list_agents(
-    status: Optional[AgentStatus] = Query(default=None, description="Filter by status"),
+    status: Optional[AgentStatus] = Query(default=AgentStatus.ACTIVE, description="Filter by status"),
     is_public: Optional[bool] = Query(default=None, description="Filter by visibility"),
     limit: int = Query(default=50, ge=1, le=100, description="Maximum number of agents to return"),
     offset: int = Query(default=0, ge=0, description="Number of agents to skip"),
@@ -88,9 +88,10 @@ def list_agents(
 ):
     """
     List all agents with optional filtering.
+    By default, only active agents are returned.
     
     Query Parameters:
-    - status: Filter by agent status (active, inactive, maintenance)
+    - status: Filter by agent status (active, inactive, maintenance) - defaults to active
     - is_public: Filter by visibility (true for public, false for private)
     - limit: Maximum number of agents to return (1-100, default 50)
     - offset: Number of agents to skip for pagination (default 0)

@@ -40,28 +40,40 @@ class IntentClassificationResult(BaseModel):
 
 
 SPECIALIST_DOMAINS = {
-    "sql-agent": {
-        "name": "SQL Query Agent",
-        "description": "Handles database queries, schema exploration, and data retrieval",
-        "keywords": ["database", "table", "query", "sql", "schema", "data"],
+    "sales-agent": {
+        "name": "Sales Agent",
+        "description": "Handles customer relationships, orders, invoices, sales performance, and revenue analysis",
+        "keywords": ["customer", "order", "sales", "revenue", "invoice", "account", "salesperson", "buying", "payment"],
         "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
     },
-    "azure-ops": {
-        "name": "Azure Operations Agent",
-        "description": "Handles Azure resources, deployments, and infrastructure",
-        "keywords": ["azure", "resource", "deployment", "infrastructure", "cloud", "kubernetes"],
+    "warehouse-agent": {
+        "name": "Warehouse Agent",
+        "description": "Handles inventory levels, stock movements, warehouse operations, and reorder management",
+        "keywords": ["inventory", "stock", "warehouse", "reorder", "supply", "bin", "units", "available", "quantity"],
         "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
     },
-    "support-triage": {
-        "name": "Support Triage Agent",
-        "description": "Handles support tickets, troubleshooting, and documentation search",
-        "keywords": ["support", "ticket", "help", "troubleshoot", "error", "problem", "documentation"],
+    "purchasing-agent": {
+        "name": "Purchasing Agent",
+        "description": "Handles suppliers, purchase orders, procurement, and vendor management",
+        "keywords": ["supplier", "purchase", "procurement", "vendor", "lead time", "delivery", "buying", "sourcing"],
         "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
     },
-    "data-analytics": {
-        "name": "Data Analytics Agent",
-        "description": "Handles analytics, insights, trends, and business intelligence",
-        "keywords": ["analytics", "insight", "trend", "report", "dashboard", "metrics", "business"],
+    "customer-service-agent": {
+        "name": "Customer Service Agent",
+        "description": "Handles order tracking, customer inquiries, issue resolution, and general support",
+        "keywords": ["track", "where is", "status", "help", "support", "issue", "problem", "inquiry", "customer service"],
+        "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
+    },
+    "finance-agent": {
+        "name": "Finance Agent",
+        "description": "Handles payments, account balances, financial transactions, and credit management",
+        "keywords": ["payment", "invoice due", "credit", "balance", "overdue", "financial", "transaction", "owed", "pay"],
+        "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
+    },
+    "microsoft-docs": {
+        "name": "Microsoft Docs Agent",
+        "description": "Searches Microsoft Learn documentation and provides technical guidance",
+        "keywords": ["microsoft", "documentation", "docs", "how to", "tutorial", "api", "reference", "learn"],
         "handoff_phrase": "This is outside my area. Let me connect you with the right specialist.",
     },
 }
@@ -74,16 +86,18 @@ SPECIALIST_DOMAINS = {
 INTENT_CLASSIFIER_SYSTEM_PROMPT = """You are an expert intent classifier for a multi-agent system.
 
 Available specialist agents:
-1. sql-agent: Database queries, tables, schemas, data retrieval
-2. azure-ops: Azure resources, deployments, infrastructure, cloud operations
-3. support-triage: Support tickets, troubleshooting, error resolution, documentation
-4. data-analytics: Analytics, insights, trends, business intelligence, reports
+1. sales-agent: Customer relationships, orders, invoices, sales performance, revenue
+2. warehouse-agent: Inventory levels, stock movements, warehouse operations, reorder points
+3. purchasing-agent: Suppliers, purchase orders, procurement, vendor management
+4. customer-service-agent: Order tracking, customer inquiries, issue resolution, general support
+5. finance-agent: Payments, account balances, financial transactions, credit management
+6. microsoft-docs: Microsoft Learn documentation, technical guidance, code samples
 
 Your task: Analyze the user's message and determine which specialist should handle it.
 
 Return a JSON object with:
 {
-  "domain": "sql-agent|azure-ops|support-triage|data-analytics",
+  "domain": "sales-agent|warehouse-agent|purchasing-agent|customer-service-agent|finance-agent|microsoft-docs",
   "is_domain_change": true/false,
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"

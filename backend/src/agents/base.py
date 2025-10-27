@@ -131,12 +131,16 @@ class DemoBaseAgent:
         sys.stdout.flush()
         
         # Create the ChatAgent using Azure OpenAI Responses client
+        # Add timeout configuration to prevent hanging
+        from httpx import Timeout
+        
         chat_client = AzureOpenAIResponsesClient(
             endpoint=endpoint,
             deployment_name=deployment_name,
             credential=credential,
             api_key=api_key,
             api_version=settings.AZURE_OPENAI_API_VERSION,
+            timeout=Timeout(120.0, read=120.0, write=30.0, connect=10.0),
         )
         
         print(f"[AGENT_INIT] AzureOpenAIResponsesClient created: {chat_client}")
@@ -183,17 +187,45 @@ class DemoBaseAgent:
         await self._apply_sliding_window(thread)
         
         logger.debug(f"Running agent '{self.name}' with message")
-        print(f"[{self.name.upper()}_RUN] Starting agent run")
+        print(f"\n{'='*80}")
+        print(f"[{self.name.upper()}_RUN] Starting agent.run() call")
+        print(f"[{self.name.upper()}_RUN] Message length: {len(str(message))}")
+        print(f"[{self.name.upper()}_RUN] Thread: {thread}")
+        print(f"{'='*80}\n")
+        
+        # Run the agent
+        # Use tool_choice="auto" to let the agent decide whether to use tools
+        # Only force tool usage if explicitly requested via kwargs
+        tool_choice = kwargs.pop("tool_choice", "auto")
+        
+        print(f"[{self.name.upper()}_RUN] 🔵 About to call self.agent.run() with tool_choice={tool_choice}")
+        
         import sys
         sys.stdout.flush()
         
-        # Run the agent
-        response = await self.agent.run(
-            messages=message,
-            thread=thread,
-            tool_choice="required",  # Force tool usage when tools are available
-            **kwargs
-        )
+        try:
+            print(f"[{self.name.upper()}_RUN] ⏱️  Calling agent.run() NOW...")
+            sys.stdout.flush()
+            
+            response = await self.agent.run(
+                messages=message,
+                thread=thread,
+                tool_choice=tool_choice,
+                **kwargs
+            )
+            
+            print(f"[{self.name.upper()}_RUN] ✅ agent.run() completed successfully!")
+            print(f"[{self.name.upper()}_RUN] Response type: {type(response)}")
+            sys.stdout.flush()
+            
+        except TimeoutError as e:
+            print(f"[{self.name.upper()}_RUN] ⏰ TIMEOUT ERROR: {e}")
+            sys.stdout.flush()
+            raise
+        except Exception as e:
+            print(f"[{self.name.upper()}_RUN] ❌ EXCEPTION: {type(e).__name__}: {e}")
+            sys.stdout.flush()
+            raise
         
         logger.debug(f"Agent '{self.name}' completed response")
         
