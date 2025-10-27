@@ -1,0 +1,124 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY_NAME: agentstatus
+  RESOURCE_GROUP: rg-agentdemo-dev
+  BACKEND_APP_NAME: ca-backend-dev
+  FRONTEND_APP_NAME: ca-frontend-dev
+  BACKEND_IMAGE_NAME: agents-backend
+  FRONTEND_IMAGE_NAME: agents-frontend
+
+jobs:
+  build-and-deploy-backend:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[backend]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Get ACR login server
+      id: acr
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --query loginServer -o tsv)
+        echo "login_server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+        
+    - name: Get version tag
+      id: version
+      run: |
+        # Get the current version from ACR and increment
+        CURRENT_VERSION=$(az acr repository show-tags --name ${{ env.REGISTRY_NAME }} --repository ${{ env.BACKEND_IMAGE_NAME }} --orderby time_desc --top 1 -o tsv | grep -oP 'v\K[0-9]+' || echo "0")
+        NEW_VERSION=$((CURRENT_VERSION + 1))
+        echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Building version v$NEW_VERSION"
+    
+    - name: Build and push backend image
+      run: |
+        az acr build \
+          --registry ${{ env.REGISTRY_NAME }} \
+          --image ${{ env.BACKEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }} \
+          --image ${{ env.BACKEND_IMAGE_NAME }}:latest \
+          --file backend/Dockerfile \
+          backend/
+          
+    - name: Deploy backend to Azure Container Apps
+      run: |
+        az containerapp update \
+          --name ${{ env.BACKEND_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --image ${{ steps.acr.outputs.login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          
+    - name: Verify backend deployment
+      run: |
+        echo "Backend deployed successfully!"
+        echo "Image: ${{ steps.acr.outputs.login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}"
+
+  build-and-deploy-frontend:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[frontend]') || contains(github.event.head_commit.message, '[all]') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Get ACR login server
+      id: acr
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --query loginServer -o tsv)
+        echo "login_server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+        
+    - name: Get backend URL
+      id: backend
+      run: |
+        BACKEND_URL=$(az containerapp show --name ${{ env.BACKEND_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+        echo "url=https://$BACKEND_URL/api" >> $GITHUB_OUTPUT
+        
+    - name: Get version tag
+      id: version
+      run: |
+        CURRENT_VERSION=$(az acr repository show-tags --name ${{ env.REGISTRY_NAME }} --repository ${{ env.FRONTEND_IMAGE_NAME }} --orderby time_desc --top 1 -o tsv | grep -oP 'v\K[0-9]+' || echo "0")
+        NEW_VERSION=$((CURRENT_VERSION + 1))
+        echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Building version v$NEW_VERSION"
+    
+    - name: Build and push frontend image
+      run: |
+        az acr build \
+          --registry ${{ env.REGISTRY_NAME }} \
+          --image ${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }} \
+          --image ${{ env.FRONTEND_IMAGE_NAME }}:latest \
+          --file frontend/Dockerfile \
+          --build-arg VITE_API_URL=${{ steps.backend.outputs.url }} \
+          frontend/
+          
+    - name: Deploy frontend to Azure Container Apps
+      run: |
+        az containerapp update \
+          --name ${{ env.FRONTEND_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --image ${{ steps.acr.outputs.login_server }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          
+    - name: Verify frontend deployment
+      run: |
+        echo "Frontend deployed successfully!"
+        echo "Image: ${{ steps.acr.outputs.login_server }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}"
+        echo "Backend API URL: ${{ steps.backend.outputs.url }}"
