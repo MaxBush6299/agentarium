@@ -37,7 +37,7 @@ param azureOpenAIEndpoint string = ''
 param azureOpenAIApiKey string = ''
 
 @description('Azure OpenAI API version')
-param azureOpenAIApiVersion string = '2025-03-01-preview'
+param azureOpenAIApiVersion string = '2025-01-01-preview'
 
 // Container Apps Environment
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-11-02-preview' = {

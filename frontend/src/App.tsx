@@ -13,6 +13,7 @@ import { AgentEditorPage } from './pages/agent-editor/AgentEditorPage'
 import { HowItWorksLanding } from './pages/how-it-works/HowItWorksLanding'
 import { ThreadManagementArticle } from './pages/how-it-works/ThreadManagementArticle'
 import { AgentDefinitionsArticle } from './pages/how-it-works/AgentDefinitionsArticle'
+import { ArchitectureArticle } from './pages/how-it-works/ArchitectureArticle';
 import './styles/App.css'
 
 /**
@@ -61,6 +62,7 @@ export const App = () => {
               <Route index element={<HowItWorksLanding />} />
               <Route path="thread-management" element={<ThreadManagementArticle />} />
               <Route path="agent-definitions" element={<AgentDefinitionsArticle />} />
+              <Route path="architecture" element={<ArchitectureArticle />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { makeStyles, shorthands, Card } from '@fluentui/react-components';
-import { Chat24Regular, Bot24Regular, Book24Regular } from '@fluentui/react-icons';
+import { Chat24Regular, Bot24Regular, Book24Regular, BuildingMultiple24Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   container: {
@@ -90,6 +90,15 @@ export const HowItWorksLanding: React.FC = () => {
   const navigate = useNavigate();
 
   const articles: ArticleCard[] = [
+    {
+        id: 'architecture',
+        title: 'Architecture & Infrastructure',
+        description:
+            'Explore the cloud-native architecture powering Agentarium, from Azure Container Apps to Cosmos DB, built with infrastructure-as-code and Microsoft Agent Framework.',
+        icon: <BuildingMultiple24Regular />,
+        date: 'October 28, 2025',
+        readTime: '12 min read',
+    },
     {
       id: 'thread-management',
       title: 'Thread Management',
