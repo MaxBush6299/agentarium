@@ -1,6 +1,7 @@
 """
 Main FastAPI application for the Agent Framework backend.
 Initializes the app with middleware, dependencies, and routes.
+Version: 1.0.1
 """
 
 import logging
