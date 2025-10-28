@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # Azure OpenAI Configuration
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     AZURE_OPENAI_KEY: Optional[str] = os.getenv("AZURE_OPENAI_KEY", None)
-    AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
+    AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
     
     # Model Configuration
     DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "gpt-4o")
