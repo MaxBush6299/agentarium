@@ -29,6 +29,16 @@ param cosmosDbDatabaseName string = 'agents-db'
 @description('Frontend URL for CORS configuration')
 param frontendUrl string = ''
 
+@description('Azure OpenAI endpoint URL')
+param azureOpenAIEndpoint string = ''
+
+@description('Azure OpenAI API key (secure)')
+@secure()
+param azureOpenAIApiKey string = ''
+
+@description('Azure OpenAI API version')
+param azureOpenAIApiVersion string = '2025-03-01-preview'
+
 // Container Apps Environment
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-11-02-preview' = {
   name: 'cae-${environmentName}'
@@ -147,6 +157,10 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
           name: 'appinsights-key'
           value: appInsightsInstrumentationKey
         }
+        {
+          name: 'azure-openai-api-key'
+          value: azureOpenAIApiKey
+        }
       ]
       ingress: {
         external: false
@@ -184,6 +198,18 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
             {
               name: 'FRONTEND_URL'
               value: !empty(frontendUrl) ? frontendUrl : 'https://ca-frontend-${environmentName}.${containerAppsEnvironment.properties.defaultDomain}'
+            }
+            {
+              name: 'AZURE_OPENAI_ENDPOINT'
+              value: azureOpenAIEndpoint
+            }
+            {
+              name: 'AZURE_OPENAI_KEY'
+              secretRef: 'azure-openai-api-key'
+            }
+            {
+              name: 'AZURE_OPENAI_API_VERSION'
+              value: azureOpenAIApiVersion
             }
           ]
         }

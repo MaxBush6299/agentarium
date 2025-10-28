@@ -238,6 +238,9 @@ module containerAppsModule './modules/container-apps.bicep' = {
     cosmosDbEndpoint: cosmosDbModule.outputs.cosmosDbEndpoint
     cosmosDbDatabaseName: 'agents-db'
     frontendUrl: '' // Will be auto-generated from Container App domain
+    azureOpenAIEndpoint: azureOpenaiEndpoint
+    azureOpenAIApiKey: azureOpenaiApiKey
+    azureOpenAIApiVersion: '2025-03-01-preview'
   }
 }
 
