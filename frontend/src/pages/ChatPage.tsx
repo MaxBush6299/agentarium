@@ -116,6 +116,19 @@ export const ChatPage = () => {
         try {
           const thread = await getChatThread(currentAgentId, threadId)
           setConversationName(thread.title || '')
+          
+          // Load messages from thread history and convert to local Message type
+          if (thread.messages && thread.messages.length > 0) {
+            const convertedMessages: Message[] = thread.messages.map(msg => ({
+              id: msg.id,
+              role: msg.role === 'user' ? MessageRole.USER : MessageRole.ASSISTANT,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp),
+            }))
+            setMessages(convertedMessages)
+          } else {
+            setMessages([])
+          }
         } catch (error) {
           console.error('Failed to load thread:', error)
         }
@@ -183,17 +196,6 @@ export const ChatPage = () => {
     //   }
     // }
   }
-
-  useEffect(() => {
-    // TODO: Load thread messages from API
-    if (threadId) {
-      console.log('Loading thread:', threadId)
-      // Future: Fetch thread messages from GET /api/threads/{threadId}/messages
-    }
-    if (locationState?.agentId) {
-      console.log('Starting chat with agent:', locationState.agentId)
-    }
-  }, [threadId, locationState])
 
   const handleSendMessage = async (content: string) => {
     console.log('Sending message to agent:', currentAgentId)
