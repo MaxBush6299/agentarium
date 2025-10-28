@@ -73,10 +73,8 @@ export const ToolConfigurator: React.FC<ToolConfiguratorProps> = ({
     const isSelected = selectedToolKeys.has(toolKey);
 
     if (isSelected) {
-      // Remove tool (but prevent removing if it's the last one)
-      if (selectedTools.length > 1) {
-        onChange(selectedTools.filter(t => `${t.type}:${t.name}` !== toolKey));
-      }
+      // Remove tool - allow deselecting all tools
+      onChange(selectedTools.filter(t => `${t.type}:${t.name}` !== toolKey));
     } else {
       // Add tool
       onChange([
@@ -117,22 +115,50 @@ export const ToolConfigurator: React.FC<ToolConfiguratorProps> = ({
               <div
                 key={toolKey}
                 style={{
-                  padding: '12px',
-                  borderRadius: 4,
-                  backgroundColor: isSelected ? '#bdb9b9' : '#868585',
-                  border: isSelected ? '1px solid #0078d4' : '1px solid #e1e1e1',
+                  padding: '14px 16px',
+                  borderRadius: 6,
+                  backgroundColor: isSelected ? '#1a76a1' : '#5bc3e8',
+                  border: isSelected ? '2px solid #3fb0dd' : '1px solid #3fb0dd',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
+                  boxShadow: isSelected ? '0 2px 8px rgba(59, 176, 221, 0.3)' : 'none',
                 }}
                 onClick={() => handleToolToggle(tool)}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.backgroundColor = '#7ad4f0';
+                    e.currentTarget.style.borderColor = '#9be3f7';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.backgroundColor = '#5bc3e8';
+                    e.currentTarget.style.borderColor = '#3fb0dd';
+                  }
+                }}
               >
                 <Checkbox
                   label={tool.label}
                   checked={isSelected}
                   onChange={() => handleToolToggle(tool)}
                   styles={{
-                    root: { margin: 0 },
-                    label: { color: '#ffffff'}
+                    root: { 
+                      margin: 0,
+                      color: '#ffffff',
+                    },
+                    checkbox: {
+                      borderColor: isSelected ? '#f0fcff' : '#7ad4f0',
+                      backgroundColor: isSelected ? '#3fb0dd' : 'transparent',
+                    },
+                    label: { 
+                      color: '#ffffffb2',
+                      fontWeight: isSelected ? 600 : 500,
+                      fontSize: '14px',
+                    },
+                    text: {
+                      color: '#ffffffe1',
+                      fontWeight: isSelected ? 600 : 500,
+                    }
                   }}
                 />
               </div>
@@ -149,14 +175,14 @@ export const ToolConfigurator: React.FC<ToolConfiguratorProps> = ({
               root: {
                 marginTop: 8,
                 fontSize: 13,
-                background: '#4a4a4a',
-                color: '#ffffff',
-                border: '1px solid #5a5a5a',
+                background: '#243240',
+                color: '#7ad4f0',
+                border: '1px solid #2d3e4a',
               },
               rootHovered: {
-                background: '#5a5a5a',
-                color: '#ffffff',
-                border: '1px solid #6a6a6a',
+                background: '#1a76a1',
+                color: '#f0fcff',
+                border: '1px solid #3fb0dd',
               },
             }}
           />
@@ -204,7 +230,7 @@ export const ToolConfigurator: React.FC<ToolConfiguratorProps> = ({
             borderLeft: '4px solid #107c10',
           }}
         >
-          <Text variant="small" styles={{ root: { color: '#333' } }}>
+          <Text variant="small" styles={{ root: { color: '#f8f0f0ff' } }}>
             <strong>{selectedTools.length} tool(s) selected:</strong>{' '}
             {selectedTools.map(t => t.name).join(', ')}
           </Text>

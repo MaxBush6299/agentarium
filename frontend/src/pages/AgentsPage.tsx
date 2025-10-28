@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Spinner,
   makeStyles,
@@ -12,6 +13,7 @@ import {
   Badge,
   Button,
 } from '@fluentui/react-components'
+import { Add24Regular } from '@fluentui/react-icons'
 import { getAgents } from '@/services/agentsService'
 import { Agent } from '@/types/agent'
 import { AgentCard } from '@/components/agents/AgentCard'
@@ -28,6 +30,12 @@ const useStyles = makeStyles({
   },
   header: {
     marginBottom: '24px',
+  },
+  headerTop: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
   },
   title: {
     fontSize: '28px',
@@ -86,6 +94,7 @@ const useStyles = makeStyles({
  */
 export const AgentsPage = () => {
   const styles = useStyles()
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<Agent[]>([])
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
@@ -162,10 +171,21 @@ export const AgentsPage = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Available Agents</h1>
-        <p className={styles.subtitle}>
-          Browse and explore our AI agents with specialized capabilities
-        </p>
+        <div className={styles.headerTop}>
+          <div>
+            <h1 className={styles.title}>Available Agents</h1>
+            <p className={styles.subtitle}>
+              Browse and explore our AI agents with specialized capabilities
+            </p>
+          </div>
+          <Button
+            appearance="primary"
+            icon={<Add24Regular />}
+            onClick={() => navigate('/agents/new')}
+          >
+            Create New Agent
+          </Button>
+        </div>
         <div className={styles.statsContainer}>
           <Button
             appearance={statusFilter === 'active' ? 'primary' : 'outline'}

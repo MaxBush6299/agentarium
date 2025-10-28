@@ -55,6 +55,7 @@ export const App = () => {
             <Route path="chat" element={<ChatPage />} />
             <Route path="chat/:threadId" element={<ChatPage />} />
             <Route path="agents" element={<AgentsPage />} />
+            <Route path="agents/new" element={<AgentEditorPage />} />
             <Route path="agents/:agentId/edit" element={<AgentEditorPage />} />
             <Route path="how-it-works">
               <Route index element={<HowItWorksLanding />} />

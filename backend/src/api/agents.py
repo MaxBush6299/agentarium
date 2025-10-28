@@ -251,7 +251,7 @@ def create_agent(
         )
         
         # Save to database
-        created_agent = repo.create(agent)
+        created_agent = repo.upsert(agent)
         
         logger.info(f"Created agent: {created_agent.id}")
         return created_agent

@@ -76,11 +76,11 @@ export const AgentEditorPage: React.FC = () => {
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  // Load agent from API
+  // Load agent from API (only for edit mode)
   useEffect(() => {
     const loadAgent = async () => {
       if (!agentId) {
-        setError('Agent ID is required');
+        // Creating new agent - no need to load
         setLoading(false);
         return;
       }
@@ -142,9 +142,6 @@ export const AgentEditorPage: React.FC = () => {
     if (!formData.model) {
       errors.model = 'Model selection is required';
     }
-    if (formData.tools.length === 0) {
-      errors.tools = 'At least one tool must be selected';
-    }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -160,23 +157,34 @@ export const AgentEditorPage: React.FC = () => {
       setSaving(true);
       setError(null);
 
-      const response = await fetch(`/api/agents/${agentId}`, {
-        method: 'PUT',
+      const isCreating = !agentId;
+      const url = isCreating ? '/api/agents' : `/api/agents/${agentId}`;
+      const method = isCreating ? 'POST' : 'PUT';
+
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        system_prompt: formData.system_prompt,
+        model: formData.model,
+        temperature: formData.temperature,
+        max_tokens: formData.max_tokens,
+        max_messages: formData.max_messages,
+        status: formData.status,
+        tools: formData.tools,
+        capabilities: formData.capabilities,
+      };
+
+      // Add ID for POST requests (creating new agent)
+      if (isCreating) {
+        (payload as any).id = `agent-${Date.now()}`;
+      }
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          system_prompt: formData.system_prompt,
-          model: formData.model,
-          temperature: formData.temperature,
-          max_tokens: formData.max_tokens,
-          max_messages: formData.max_messages,
-          status: formData.status,
-          tools: formData.tools,
-          capabilities: formData.capabilities,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -263,7 +271,7 @@ export const AgentEditorPage: React.FC = () => {
             />
             <div style={{ flex: 1, textAlign: 'center' }}>
               <Text variant="medium" styles={{ root: { fontWeight: 600, color: '#ffffff', fontSize: '18px' } }}>
-                Edit Agent
+                {agentId ? 'Edit Agent' : 'Create New Agent'}
               </Text>
               <Text variant="medium" styles={{ root: { color: '#b4b4b4', marginTop: 4 } }}>
                 {formData.name || 'Agent Configuration'}

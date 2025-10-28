@@ -42,7 +42,7 @@ export const AgentFormSchema = z.object({
     .describe('Agent capabilities for discovery and filtering'),
   status: z.enum(['active', 'inactive', 'maintenance']).default('active'),
   tools: z.array(ToolSchema)
-    .min(1, 'At least one tool must be selected'),
+    .default([]),
 });
 
 export type AgentFormData = z.infer<typeof AgentFormSchema>;

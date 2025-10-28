@@ -94,3 +94,5 @@ Register MCP tools/clients and optional exposure of agents as MCP tools/servers.
 Stream responses to the frontend and record runs/steps in Cosmos DB.
 
 Prefer the Responses API with GPT-5; fallback to GPT-4.1.
+
+When committing, use [frontend] to deploy frontend code, [backend] for backend code, or [all] for both.

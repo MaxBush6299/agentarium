@@ -81,20 +81,6 @@ class ModelInfo(BaseModel):
 # These are typical deployment names - can be customized per environment via .env
 KNOWN_DEPLOYMENTS: List[Dict[str, Any]] = [
     {
-        "deployment_name": "gpt-4",
-        "model_id": "gpt-4",
-        "description": "GPT-4 model",
-        "capabilities": ["function_calling", "json_mode", "vision"],
-        "context_window": 8192
-    },
-    {
-        "deployment_name": "gpt-4-turbo",
-        "model_id": "gpt-4-turbo",
-        "description": "GPT-4 Turbo model with 128K context",
-        "capabilities": ["function_calling", "json_mode", "vision"],
-        "context_window": 128000
-    },
-    {
         "deployment_name": "gpt-4o",
         "model_id": "gpt-4o",
         "description": "GPT-4o model - latest and most capable",
@@ -102,11 +88,11 @@ KNOWN_DEPLOYMENTS: List[Dict[str, Any]] = [
         "context_window": 128000
     },
     {
-        "deployment_name": "gpt-35-turbo",
-        "model_id": "gpt-3.5-turbo",
-        "description": "GPT-3.5 Turbo model",
-        "capabilities": ["function_calling"],
-        "context_window": 4096
+        "deployment_name": "gpt-4.1",
+        "model_id": "gpt-4.1",
+        "description": "GPT-4.1 model - improved performance",
+        "capabilities": ["function_calling", "json_mode", "vision"],
+        "context_window": 128000
     },
 ]
 
