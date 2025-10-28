@@ -16,8 +16,9 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     ...shorthands.gap(tokens.spacingVerticalS),
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
-    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
-    backgroundColor: tokens.colorNeutralBackground1,
+    borderTop: '1px solid #2d3e4a',
+    background: 'linear-gradient(180deg, #1a2530 0%, #243240 100%)',
+    boxShadow: '0 -2px 8px rgba(27, 137, 187, 0.15)',
   },
   inputRow: {
     display: 'flex',
@@ -40,11 +41,11 @@ const useStyles = makeStyles({
   },
   hint: {
     fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
+    color: '#7ad4f0',
   },
   charCount: {
     fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
+    color: '#bdeffc',
   },
   charCountWarning: {
     color: tokens.colorPaletteRedForeground1,

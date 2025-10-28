@@ -25,14 +25,14 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     height: '100%',
     padding: '48px',
-    backgroundColor: tokens.colorNeutralBackground1,
+    background: 'linear-gradient(135deg, #0e1419 0%, #1a2530 100%)',
   },
   hero: {
     textAlign: 'center',
     marginBottom: '48px',
   },
   logo: {
-    width: '400px',
+    width: '300px',
     height: 'auto',
     marginBottom: '24px',
     marginTop: '24px',
@@ -57,9 +57,14 @@ const useStyles = makeStyles({
   },
   card: {
     cursor: 'pointer',
-    transition: 'transform 0.2s',
+    background: 'linear-gradient(135deg, #1a2530 0%, #243240 100%)',
+    border: '1px solid #2d3e4a',
+    boxShadow: '0 2px 8px rgba(27, 137, 187, 0.2)',
+    transition: 'all 0.3s ease',
     ':hover': {
       transform: 'translateY(-4px)',
+      boxShadow: '0 8px 16px rgba(59, 176, 221, 0.3)',
+      border: '1px solid #3fb0dd',
     },
   },
   cardContent: {

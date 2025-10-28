@@ -5,7 +5,6 @@
 
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
-  Button,
   Tab,
   TabList,
   makeStyles,
@@ -22,7 +21,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     height: '100vh',
-    backgroundColor: tokens.colorNeutralBackground1,
+    background: 'linear-gradient(135deg, #0e1419 0%, #1a2530 100%)',
   },
   header: {
     display: 'flex',
@@ -30,12 +29,21 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     padding: '12px 24px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
+    background: 'linear-gradient(90deg, #1a2530 0%, #243240 100%)',
+    boxShadow: '0 2px 8px rgba(27, 137, 187, 0.2)',
   },
   title: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
     fontSize: tokens.fontSizeBase500,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
+  },
+  logo: {
+    width: '48px',
+    height: '48px',
+    objectFit: 'contain',
   },
   nav: {
     display: 'flex',
@@ -71,7 +79,10 @@ export const AppLayout = () => {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <div className={styles.title}>🤖 Agentarium</div>
+        <div className={styles.title}>
+          <img src="/favicon.png" alt="Agentarium" className={styles.logo} />
+          Agentarium
+        </div>
         <nav className={styles.nav}>
           <TabList
             selectedValue={getSelectedTab()}

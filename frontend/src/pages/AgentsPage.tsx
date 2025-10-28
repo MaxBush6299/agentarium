@@ -24,7 +24,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     height: '100%',
     padding: '24px',
-    backgroundColor: tokens.colorNeutralBackground1,
+    background: 'linear-gradient(135deg, #0e1419 0%, #1a2530 100%)',
   },
   header: {
     marginBottom: '24px',
@@ -33,10 +33,11 @@ const useStyles = makeStyles({
     fontSize: '28px',
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: '8px',
+    color: '#f0fcff',
   },
   subtitle: {
     fontSize: '14px',
-    color: tokens.colorNeutralForeground3,
+    color: '#7ad4f0',
     marginBottom: '16px',
   },
   searchContainer: {

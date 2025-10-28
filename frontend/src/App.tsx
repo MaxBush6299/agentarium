@@ -4,8 +4,7 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { FluentProvider, webLightTheme, webDarkTheme } from '@fluentui/react-components'
-import { useState, useEffect } from 'react'
+import { FluentProvider, createDarkTheme, BrandVariants } from '@fluentui/react-components'
 import { AppLayout } from './components/navigation/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { ChatPage } from './pages/ChatPage'
@@ -14,22 +13,35 @@ import { AgentEditorPage } from './pages/agent-editor/AgentEditorPage'
 import './styles/App.css'
 
 /**
+ * Agentarium Brand Colors - Blue/Green Theme
+ * Primary: Deep ocean blue to cyan gradient
+ * Accent: Emerald green to mint green
+ */
+const agentariumBrand: BrandVariants = {
+  10: "#021014",
+  20: "#0a1f28",
+  30: "#0e2f3f",
+  40: "#124056",
+  50: "#15516e",
+  60: "#186387",
+  70: "#1a76a1",
+  80: "#1b89bb",
+  90: "#2b9dcc",
+  100: "#3fb0dd",
+  110: "#5bc3e8",
+  120: "#7ad4f0",
+  130: "#9be3f7",
+  140: "#bdeffc",
+  150: "#ddf9ff",
+  160: "#f0fcff"
+};
+
+/**
  * Main App Component
  */
 export const App = () => {
-  const [isDark, setIsDark] = useState(false)
-
-  // Detect system theme preference
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    setIsDark(mediaQuery.matches)
-
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches)
-    mediaQuery.addEventListener('change', handler)
-    return () => mediaQuery.removeEventListener('change', handler)
-  }, [])
-
-  const theme = isDark ? webDarkTheme : webLightTheme
+  // Create custom dark theme with Agentarium branding (always blue theme)
+  const theme = createDarkTheme(agentariumBrand)
 
   return (
     <FluentProvider theme={theme}>

@@ -1,20 +1,34 @@
-/* Agent Editor Global Styles - Dark Theme */
+/* Agent Editor Global Styles - Agentarium Blue/Green Theme */
 
 :root {
-  --primary-color: #0078d4;
-  --primary-gradient: linear-gradient(135deg, #0078d4 0%, #50e6ff 100%);
-  --success-color: #107c10;
-  --warning-color: #ff8c00;
-  --danger-color: #d13438;
-  --border-color: #3a3a3a;
-  --background-color: #1a1a1a;
-  --surface-color: #252525;
-  --surface-hover: #2f2f2f;
-  --text-primary: #ffffff;
-  --text-secondary: #e0e0e0;
-  --text-tertiary: #b8b8b8;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+  /* Primary Brand - Ocean Blue to Cyan */
+  --primary-color: #1a76a1;
+  --primary-gradient: linear-gradient(135deg, #186387 0%, #5bc3e8 100%);
+  
+  /* Success - Emerald Green */
+  --success-color: #10b981;
+  --success-gradient: linear-gradient(135deg, #059669 0%, #34d399 100%);
+  
+  /* Warning - Amber */
+  --warning-color: #f59e0b;
+  
+  /* Danger - Coral Red */
+  --danger-color: #ef4444;
+  
+  /* Dark Theme Neutrals */
+  --border-color: #2d3e4a;
+  --background-color: #0e1419;
+  --surface-color: #1a2530;
+  --surface-hover: #243240;
+  
+  /* Text Colors */
+  --text-primary: #f0fcff;
+  --text-secondary: #bdeffc;
+  --text-tertiary: #7ad4f0;
+  
+  /* Shadows with blue tint */
+  --shadow-sm: 0 2px 8px rgba(27, 137, 187, 0.2);
+  --shadow-md: 0 4px 12px rgba(27, 137, 187, 0.3);
   --radius: 6px;
 }
 

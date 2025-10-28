@@ -1,4 +1,4 @@
-/* App-specific styles */
+/* App-specific styles - Agentarium Blue/Green Theme */
 
 .app-container {
   display: flex;
@@ -6,6 +6,7 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  background: linear-gradient(135deg, #0e1419 0%, #1a2530 100%);
 }
 
 .page-container {
@@ -14,6 +15,7 @@
   height: 100%;
   padding: 24px;
   overflow-y: auto;
+  background: transparent;
 }
 
 .page-header {
@@ -28,20 +30,24 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: #666;
+  color: #7ad4f0;
 }
 
 /* Card styles */
 .card {
-  background: white;
+  background: linear-gradient(135deg, #1a2530 0%, #243240 100%);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(27, 137, 187, 0.2);
+  border: 1px solid #2d3e4a;
   padding: 16px;
   margin-bottom: 16px;
+  transition: all 0.3s ease;
 }
 
 .card:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(59, 176, 221, 0.3);
+  border-color: #3fb0dd;
+  transform: translateY(-2px);
 }
 
 /* Loading spinner */
@@ -65,7 +71,7 @@
 }
 
 .error-message {
-  color: #d13438;
+  color: #ef4444;
   font-weight: 500;
   margin-bottom: 16px;
 }
@@ -79,7 +85,7 @@
   height: 100%;
   padding: 48px;
   text-align: center;
-  color: #666;
+  color: #7ad4f0;
 }
 
 .empty-state-icon {

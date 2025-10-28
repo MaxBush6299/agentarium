@@ -26,18 +26,19 @@ const useStyles = makeStyles({
   container: {
     display: 'flex',
     height: '100%',
-    backgroundColor: tokens.colorNeutralBackground1,
+    background: 'linear-gradient(135deg, #0e1419 0%, #1a2530 100%)',
   },
   sidebar: {
     width: '300px',
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRight: `1px solid #2d3e4a`,
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: tokens.colorNeutralBackground2,
+    background: 'linear-gradient(180deg, #1a2530 0%, #243240 100%)',
+    boxShadow: '2px 0 8px rgba(27, 137, 187, 0.15)',
   },
   sidebarHeader: {
     padding: '16px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderBottom: `1px solid #2d3e4a`,
   },
   main: {
     flex: 1,
@@ -46,8 +47,9 @@ const useStyles = makeStyles({
   },
   chatHeader: {
     padding: '16px 24px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid #2d3e4a`,
+    background: 'linear-gradient(90deg, #1a2530 0%, #243240 100%)',
+    boxShadow: '0 2px 8px rgba(27, 137, 187, 0.2)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',

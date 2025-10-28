@@ -24,10 +24,14 @@ const useStyles = makeStyles({
   card: {
     height: '300px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    background: 'linear-gradient(135deg, #1a2530 0%, #243240 100%)',
+    border: '1px solid #2d3e4a',
+    boxShadow: '0 2px 8px rgba(27, 137, 187, 0.2)',
+    transition: 'all 0.3s ease',
     ':hover': {
       transform: 'translateY(-2px)',
-      boxShadow: tokens.shadow16,
+      boxShadow: '0 8px 16px rgba(59, 176, 221, 0.3)',
+      border: '1px solid #3fb0dd',
     },
   },
   content: {
@@ -37,11 +41,12 @@ const useStyles = makeStyles({
     fontSize: '20px',
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: '12px',
+    color: '#f0fcff',
   },
   description: {
     fontSize: '14px',
     lineHeight: '1.5',
-    color: tokens.colorNeutralForeground3,
+    color: '#bdeffc',
     marginBottom: '20px',
     minHeight: '80px',
   },
