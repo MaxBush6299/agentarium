@@ -213,6 +213,198 @@ class HandoffRouter:
             logger.error(f"Error routing to specialist: {type(e).__name__}: {e}", exc_info=False)
             return None, None, ""
     
+    async def analyze_response_gaps(
+        self,
+        user_message: str,
+        specialist_response: str,
+        specialist_id: str,
+        agents_consulted: List[str]
+    ) -> Optional[str]:
+        """
+        Analyze if the specialist's response fully addresses the user's query.
+        
+        Uses LLM to detect if there are gaps or unanswered parts of the query that
+        require consultation with another specialist.
+        
+        Args:
+            user_message: Original user query
+            specialist_response: Response from the specialist
+            specialist_id: ID of the specialist who responded
+            agents_consulted: List of agent IDs already consulted (to avoid loops)
+            
+        Returns:
+            Next specialist ID if gaps detected, None if query fully addressed
+        """
+        try:
+            # Build gap analysis prompt
+            available_specialists = [
+                agent_id for agent_id in self.SPECIALIST_DOMAINS.keys()
+                if agent_id not in agents_consulted and agent_id != specialist_id
+            ]
+            
+            if not available_specialists:
+                logger.info("🔍 No more specialists available for gap analysis")
+                return None
+            
+            specialist_list = "\n".join([
+                f"- {agent_id}: {self.SPECIALIST_DOMAINS[agent_id]['name']}"
+                for agent_id in available_specialists
+            ])
+            
+            gap_analysis_prompt = f"""Analyze if the specialist's response fully addresses the user's query.
+
+USER QUERY:
+{user_message}
+
+SPECIALIST RESPONSE (from {specialist_id}):
+{specialist_response}
+
+AVAILABLE SPECIALISTS:
+{specialist_list}
+
+TASK:
+Determine if the user's query has been FULLY addressed, or if there are gaps/unanswered parts that require another specialist.
+
+Consider:
+1. Does the response answer ALL parts of the user's question?
+2. Are there related questions implied by the user that weren't addressed?
+3. Would additional specialist input provide value?
+
+RESPONSE FORMAT:
+If query is FULLY addressed:
+{{"needs_handoff": false, "next_specialist": null, "reasoning": "Brief explanation"}}
+
+If query has GAPS requiring another specialist:
+{{"needs_handoff": true, "next_specialist": "agent-id-here", "reasoning": "Brief explanation of what's missing"}}
+
+Respond with ONLY the JSON object, no other text."""
+
+            # Call LLM for gap analysis
+            from src.config import settings
+            from openai import AsyncAzureOpenAI
+            
+            client = AsyncAzureOpenAI(
+                api_key=settings.AZURE_OPENAI_KEY,
+                api_version=settings.AZURE_OPENAI_API_VERSION,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
+            )
+            
+            response = await client.chat.completions.create(
+                model=settings.DEFAULT_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are an expert at analyzing conversational AI responses for completeness."},
+                    {"role": "user", "content": gap_analysis_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+            
+            result_text = response.choices[0].message.content
+            if not result_text:
+                logger.warning("Gap analysis returned empty response")
+                return None
+            
+            result_text = result_text.strip()
+            
+            # Parse JSON response
+            import json
+            result = json.loads(result_text)
+            
+            if result.get("needs_handoff"):
+                next_specialist = result.get("next_specialist")
+                reasoning = result.get("reasoning", "")
+                logger.info(f"🔍 Gap analysis: Handoff needed to {next_specialist}")
+                logger.info(f"🔍 Reasoning: {reasoning}")
+                return next_specialist
+            else:
+                reasoning = result.get("reasoning", "")
+                logger.info(f"🔍 Gap analysis: Query fully addressed")
+                logger.info(f"🔍 Reasoning: {reasoning}")
+                return None
+        
+        except Exception as e:
+            logger.error(f"Error in gap analysis: {type(e).__name__}: {e}", exc_info=False)
+            return None
+    
+    async def _synthesize_responses(
+        self,
+        user_message: str,
+        agent_responses: List[Dict[str, str]]
+    ) -> str:
+        """
+        Synthesize multiple agent responses into a coherent final answer.
+        
+        Args:
+            user_message: Original user query
+            agent_responses: List of dicts with 'agent_id' and 'response' keys
+            
+        Returns:
+            Synthesized response combining all agent insights
+        """
+        try:
+            if len(agent_responses) == 1:
+                # Only one response, return as-is
+                return agent_responses[0]['response']
+            
+            # Build synthesis prompt
+            responses_text = "\n\n".join([
+                f"FROM {resp['agent_id']}:\n{resp['response']}"
+                for resp in agent_responses
+            ])
+            
+            synthesis_prompt = f"""Synthesize the following specialist responses into a single, coherent answer.
+
+USER QUERY:
+{user_message}
+
+SPECIALIST RESPONSES:
+{responses_text}
+
+TASK:
+Combine these responses into a comprehensive answer that:
+1. Addresses all parts of the user's query
+2. Flows naturally and logically
+3. Avoids repetition
+4. Maintains professional tone
+5. Preserves important details and data from each specialist
+
+Provide ONLY the synthesized response, no meta-commentary."""
+
+            # Call LLM for synthesis
+            from src.config import settings
+            from openai import AsyncAzureOpenAI
+            
+            client = AsyncAzureOpenAI(
+                api_key=settings.AZURE_OPENAI_KEY,
+                api_version=settings.AZURE_OPENAI_API_VERSION,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
+            )
+            
+            response = await client.chat.completions.create(
+                model=settings.DEFAULT_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are an expert at synthesizing multi-agent responses into coherent answers."},
+                    {"role": "user", "content": synthesis_prompt}
+                ],
+                temperature=0.5,
+                max_tokens=2000
+            )
+            
+            synthesized_content = response.choices[0].message.content
+            if not synthesized_content:
+                logger.warning("Synthesis returned empty response, using fallback")
+                return "\n\n".join([resp['response'] for resp in agent_responses])
+            
+            synthesized = synthesized_content.strip()
+            logger.info(f"📝 Synthesized response from {len(agent_responses)} agents")
+            
+            return synthesized
+        
+        except Exception as e:
+            logger.error(f"Error synthesizing responses: {type(e).__name__}: {e}", exc_info=False)
+            # Fallback: concatenate responses
+            return "\n\n".join([resp['response'] for resp in agent_responses])
+    
     async def route_and_chat(
         self,
         agent: Optional[DemoBaseAgent],
@@ -252,6 +444,8 @@ class HandoffRouter:
             specialist_used = None
             handoff_count = 0
             all_tool_calls: List[Dict[str, Any]] = []
+            agent_responses: List[Dict[str, str]] = []  # Track all specialist responses
+            agents_consulted: List[str] = []  # Track which agents we've already consulted
             
             for turn in range(max_handoffs + 1):
                 # Classify intent and get specialist
@@ -305,29 +499,79 @@ class HandoffRouter:
                     # Extract response text
                     response_text = self._extract_response_text(response)
                     
+                    # Store this agent's response (only if we have a valid agent ID)
+                    if target_agent_id:
+                        agent_responses.append({
+                            'agent_id': target_agent_id,
+                            'response': response_text
+                        })
+                        agents_consulted.append(target_agent_id)
+                    
                     # Extract tool calls from response structure (pass agent_thread for message_store access)
                     tool_calls = self._extract_tool_calls(response, agent_thread=agent_thread)
                     all_tool_calls.extend(tool_calls)
                     
-                    # Check if specialist is requesting handoff
-                    needs_handoff = self.detect_handoff_request(response_text)
+                    # HYBRID HANDOFF DETECTION
+                    # Mode 1: Check for explicit handoff signals
+                    explicit_handoff = self.detect_handoff_request(response_text)
                     
-                    if needs_handoff and handoff_count < max_handoffs:
-                        logger.info(f"[HANDOFF-TURN-{turn}] Handoff detected, re-routing...")
-                        print(f"[HANDOFF-TURN-{turn}] Handoff detected, re-routing...")
+                    if explicit_handoff:
+                        logger.info(f"🔄 [HANDOFF-TURN-{turn}] Explicit handoff signal detected")
+                        print(f"🔄 [HANDOFF-TURN-{turn}] Explicit handoff signal detected")
                         
-                        # Note: We don't need to manually update history since orchestrator tracks it
-                        # when classify_intent is called on the next turn
+                        if handoff_count < max_handoffs:
+                            # Set next message to original user query (for re-classification)
+                            current_message = user_message
+                            handoff_count += 1
+                            continue
+                    
+                    # Mode 2: Gap analysis - check if response fully addresses query
+                    if handoff_count < max_handoffs and target_agent_id:
+                        logger.info(f"🔍 [HANDOFF-TURN-{turn}] Running gap analysis...")
+                        print(f"🔍 [HANDOFF-TURN-{turn}] Running gap analysis...")
                         
-                        # Set next message to original user query (for re-classification)
-                        current_message = user_message
-                        handoff_count += 1
-                        continue
+                        next_specialist = await self.analyze_response_gaps(
+                            user_message=user_message,
+                            specialist_response=response_text,
+                            specialist_id=target_agent_id,
+                            agents_consulted=agents_consulted
+                        )
+                        
+                        if next_specialist:
+                            logger.info(f"🔍 [HANDOFF-TURN-{turn}] Gap detected, routing to {next_specialist}")
+                            print(f"🔍 [HANDOFF-TURN-{turn}] Gap detected, routing to {next_specialist}")
+                            
+                            # Override next routing to the suggested specialist
+                            # We'll use the orchestrator's manual routing
+                            current_message = user_message
+                            handoff_count += 1
+                            
+                            # Load the suggested specialist directly
+                            target_agent_id, specialist_agent, context_prefix = target_agent_id, await self._get_specialist_agent(next_specialist), ""
+                            if not specialist_agent:
+                                logger.error(f"Could not load suggested specialist: {next_specialist}")
+                                break
+                            
+                            target_agent_id = next_specialist
+                            specialist_used = next_specialist
+                            continue
+                    
+                    # No handoff needed - finalize response
+                    logger.info(f"🏁 [HANDOFF-TURN-{turn}] Query fully addressed by {len(agent_responses)} specialist(s)")
+                    print(f"🏁 [HANDOFF-TURN-{turn}] Query fully addressed")
+                    
+                    # Synthesize if multiple specialists were consulted
+                    if len(agent_responses) > 1:
+                        logger.info(f"📝 [HANDOFF-TURN-{turn}] Synthesizing {len(agent_responses)} responses...")
+                        print(f"📝 [HANDOFF-TURN-{turn}] Synthesizing responses...")
+                        
+                        final_response = await self._synthesize_responses(
+                            user_message=user_message,
+                            agent_responses=agent_responses
+                        )
+                        return final_response, specialist_used, all_tool_calls
                     else:
-                        # No handoff or max handoffs reached
-                        logger.info(f"[HANDOFF-TURN-{turn}] Final response from {target_agent_id}")
-                        print(f"[HANDOFF-TURN-{turn}] Final response from {target_agent_id}")
-                        
+                        # Single specialist - return response as-is
                         return response_text, specialist_used, all_tool_calls
                 
                 except Exception as e:
