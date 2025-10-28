@@ -10,6 +10,9 @@ import { HomePage } from './pages/HomePage'
 import { ChatPage } from './pages/ChatPage'
 import { AgentsPage } from './pages/AgentsPage'
 import { AgentEditorPage } from './pages/agent-editor/AgentEditorPage'
+import { HowItWorksLanding } from './pages/how-it-works/HowItWorksLanding'
+import { ThreadManagementArticle } from './pages/how-it-works/ThreadManagementArticle'
+import { AgentDefinitionsArticle } from './pages/how-it-works/AgentDefinitionsArticle'
 import './styles/App.css'
 
 /**
@@ -53,6 +56,11 @@ export const App = () => {
             <Route path="chat/:threadId" element={<ChatPage />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="agents/:agentId/edit" element={<AgentEditorPage />} />
+            <Route path="how-it-works">
+              <Route index element={<HowItWorksLanding />} />
+              <Route path="thread-management" element={<ThreadManagementArticle />} />
+              <Route path="agent-definitions" element={<AgentDefinitionsArticle />} />
+            </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

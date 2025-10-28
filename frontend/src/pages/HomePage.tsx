@@ -14,7 +14,7 @@ import {
 import {
   Chat24Regular,
   PeopleTeam24Regular,
-  Lightbulb24Regular,
+  Book24Regular,
 } from '@fluentui/react-icons'
 
 const useStyles = makeStyles({
@@ -142,22 +142,21 @@ export const HomePage = () => {
           </div>
         </Card>
 
-        <Card className={styles.card}>
+        <Card className={styles.card} onClick={() => navigate('/how-it-works')}>
           <div className={styles.cardContent}>
             <div className={styles.cardIcon}>
-              <Lightbulb24Regular />
+              <Book24Regular />
             </div>
             <CardHeader
-              header={<div className={styles.cardTitle}>Features</div>}
+              header={<div className={styles.cardTitle}>How It Works</div>}
               description={
                 <div className={styles.cardDescription}>
-                  • Real-time SSE streaming<br />
-                  • Tool execution tracing<br />
-                  • Agent-to-agent communication<br />
-                  • Persistent conversation threads
+                  Learn about thread management, agent architecture, and the
+                  technology powering Agentarium.
                 </div>
               }
             />
+            <Button>Learn More</Button>
           </div>
         </Card>
       </div>

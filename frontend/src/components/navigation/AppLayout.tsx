@@ -14,6 +14,7 @@ import {
   Chat24Regular,
   PeopleTeam24Regular,
   Home24Regular,
+  Book24Regular,
 } from '@fluentui/react-icons'
 
 const useStyles = makeStyles({
@@ -68,6 +69,7 @@ export const AppLayout = () => {
   const getSelectedTab = () => {
     if (location.pathname.startsWith('/chat')) return 'chat'
     if (location.pathname.startsWith('/agents')) return 'agents'
+    if (location.pathname.startsWith('/how-it-works')) return 'how-it-works'
     return 'home'
   }
 
@@ -96,6 +98,9 @@ export const AppLayout = () => {
             </Tab>
             <Tab value="agents" icon={<PeopleTeam24Regular />}>
               Agents
+            </Tab>
+            <Tab value="how-it-works" icon={<Book24Regular />}>
+              How It Works
             </Tab>
           </TabList>
         </nav>
