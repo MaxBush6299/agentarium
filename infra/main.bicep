@@ -235,6 +235,31 @@ module containerAppsModule './modules/container-apps.bicep' = {
     logAnalyticsWorkspaceId: observabilityModule.outputs.logAnalyticsWorkspaceId
     appInsightsInstrumentationKey: observabilityModule.outputs.appInsightsInstrumentationKey
     environmentName: environmentName
+    cosmosDbEndpoint: cosmosDbModule.outputs.cosmosDbEndpoint
+    cosmosDbDatabaseName: 'agents-db'
+    frontendUrl: '' // Will be auto-generated from Container App domain
+  }
+}
+
+// ============================================================================
+// RBAC: GRANT BACKEND MANAGED IDENTITY ACCESS TO COSMOS DB
+// ============================================================================
+
+// Cosmos DB Data Contributor role definition (built-in role)
+var cosmosDbDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
+
+resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' existing = {
+  name: cosmosDbAccountName
+}
+
+// Grant backend managed identity Cosmos DB Data Contributor access
+resource backendCosmosRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-11-15' = {
+  parent: cosmosDbAccount
+  name: guid(subscription().id, cosmosDbAccountName, 'backend', environmentName)
+  properties: {
+    roleDefinitionId: '${cosmosDbAccount.id}/sqlRoleDefinitions/${cosmosDbDataContributorRoleId}'
+    principalId: containerAppsModule.outputs.backendPrincipalId
+    scope: cosmosDbAccount.id
   }
 }
 

@@ -20,6 +20,15 @@ param appInsightsInstrumentationKey string
 @description('Environment name for the Container Apps (dev/prod)')
 param environmentName string = 'demo'
 
+@description('Cosmos DB endpoint URL')
+param cosmosDbEndpoint string
+
+@description('Cosmos DB database name')
+param cosmosDbDatabaseName string = 'agents-db'
+
+@description('Frontend URL for CORS configuration')
+param frontendUrl string = ''
+
 // Container Apps Environment
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-11-02-preview' = {
   name: 'cae-${environmentName}'
@@ -122,6 +131,9 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
   name: 'ca-backend-${environmentName}'
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppsEnvironment.id
     environmentId: containerAppsEnvironment.id
@@ -160,6 +172,18 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
             {
               name: 'ASPNETCORE_ENVIRONMENT'
               value: 'Production'
+            }
+            {
+              name: 'COSMOS_ENDPOINT'
+              value: cosmosDbEndpoint
+            }
+            {
+              name: 'COSMOS_DATABASE_NAME'
+              value: cosmosDbDatabaseName
+            }
+            {
+              name: 'FRONTEND_URL'
+              value: !empty(frontendUrl) ? frontendUrl : 'https://ca-frontend-${environmentName}.${containerAppsEnvironment.properties.defaultDomain}'
             }
           ]
         }
@@ -206,3 +230,6 @@ output backendContainerAppName string = backendContainerApp.name
 
 @description('Backend Container App FQDN')
 output backendFqdn string = backendContainerApp.properties.configuration.ingress.fqdn
+
+@description('Backend Container App managed identity principal ID')
+output backendPrincipalId string = backendContainerApp.identity.principalId
