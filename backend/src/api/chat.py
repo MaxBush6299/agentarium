@@ -592,10 +592,14 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
     finally:
         event_count = 0
         try:
+            print("[FINALLY] About to stream events from queue...")
+            sys.stdout.flush()
             # Stream all queued events
             async for event_str in event_gen.stream():
                 event_count += 1
                 try:
+                    print(f"[FINALLY] Yielding event #{event_count}: {event_str[:80]}...")
+                    sys.stdout.flush()
                     yield event_str
                 except Exception as yield_error:
                     logging.error(f"Error yielding event: {yield_error}")
@@ -604,6 +608,7 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
             logging.error(f"Error in event stream loop: {stream_loop_error}")
         finally:
             print("[F5] Closing event generator")
+            sys.stdout.flush()
             try:
                 await event_gen.close()
                 print("[F6] Event generator closed successfully")
@@ -611,6 +616,7 @@ async def stream_chat_response(agent, thread: Thread, run, user_message: str):
                 print(f"[F7] Error closing event generator: {close_error}")
         
         print("========== FINALLY BLOCK END ==========\n")
+        sys.stdout.flush()
 
 
 @router.post("/{agent_id}/threads")
@@ -751,6 +757,73 @@ async def delete_thread(
         raise
     except Exception as e:
         logger.error(f"Error deleting thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{agent_id}/threads/{thread_id}/messages", name="add_agent_thread_message")
+async def add_agent_thread_message(
+    agent_id: str = Path(..., description="Agent ID"),
+    thread_id: str = Path(..., description="Thread ID"),
+    request: Optional[ChatRequest] = None
+):
+    """
+    Add a message to an agent thread.
+    
+    Args:
+        agent_id: ID of the agent
+        thread_id: ID of the thread
+        request: Chat request with message and role
+        
+    Returns:
+        Updated thread object
+    """
+    if request is None:
+        raise HTTPException(status_code=400, detail="Request body required")
+    
+    try:
+        from src.persistence.threads import get_thread_repository
+        from src.persistence.models import Message
+        
+        repo = get_thread_repository()
+        thread = await repo.get(thread_id, agent_id)
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
+        
+        # Create message
+        message = Message(
+            id=f"msg_{int(asyncio.get_event_loop().time() * 1000)}",
+            role=getattr(request, 'role', 'assistant'),  # Default to 'assistant' if not provided
+            content=request.message,
+            timestamp=datetime.utcnow()
+        )
+        
+        # Add message to thread
+        updated_thread = await repo.add_message(thread_id, agent_id, message, thread)
+        
+        logger.info(f"Added message to agent thread: {thread_id}")
+        
+        return {
+            "id": updated_thread.id,
+            "agent_id": updated_thread.agent_id,
+            "title": updated_thread.title or "Untitled",
+            "created_at": updated_thread.created_at.isoformat(),
+            "updated_at": updated_thread.updated_at.isoformat(),
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp.isoformat() if hasattr(m, 'timestamp') else datetime.utcnow().isoformat(),
+                }
+                for m in updated_thread.messages
+            ],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding message to agent thread: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
