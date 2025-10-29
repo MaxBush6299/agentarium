@@ -76,6 +76,7 @@ ANALYSIS PROCESS:
 PRESENTATION FORMAT:
 
 Structure your analysis as:
+1. **Data** - return raw data response
 1. **Executive Summary** - Key finding in 1-2 sentences
 2. **Data Overview** - What data was analyzed
 3. **Key Findings** - 3-5 main insights (most important first)

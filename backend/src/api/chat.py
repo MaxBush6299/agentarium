@@ -131,6 +131,68 @@ async def chat_with_agent(
     logger.info(f"Chat request for agent {agent_id}: {request.message[:50]}...")
     
     try:
+        # Check if this is actually a workflow ID (not an agent)
+        try:
+            from src.agents.workflows import validate_workflow_id, get_available_workflows
+            
+            if validate_workflow_id(agent_id):
+                logger.info(f"Detected workflow ID: {agent_id}, delegating to workflows endpoint")
+                
+                # Import workflow execution
+                from src.agents.workflows.orchestrator_factory import create_orchestrator
+                
+                # Convert chat request to workflow request
+                if not request.thread_id:
+                    thread_id = f"workflow_{uuid.uuid4().hex[:12]}"
+                else:
+                    thread_id = request.thread_id
+                
+                # Create orchestrator and execute
+                orchestrator = await create_orchestrator(
+                    workflow_id=agent_id,
+                    chat_client=None,
+                )
+                
+                final_response, trace_metadata = await orchestrator.execute(
+                    message=request.message,
+                    thread_id=thread_id,
+                )
+                
+                # Return SSE stream with workflow response
+                async def workflow_event_generator():
+                    """Generate SSE events for workflow execution."""
+                    # Stream the message content as tokens to match agent streaming format
+                    logger.info(f"Streaming workflow response: {final_response[:100]}...")
+                    
+                    # Split response into chunks for streaming effect
+                    chunk_size = 20
+                    for i in range(0, len(final_response), chunk_size):
+                        chunk = final_response[i:i + chunk_size]
+                        yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0.05)
+                    
+                    # Send metadata as trace event
+                    metadata_dict = trace_metadata.model_dump(mode='json') if hasattr(trace_metadata, 'model_dump') else trace_metadata
+                    yield f"data: {json.dumps({'type': 'trace_update', 'trace': metadata_dict})}\n\n"
+                    await asyncio.sleep(0.1)
+                    
+                    # Send done event
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                
+                return StreamingResponse(
+                    workflow_event_generator(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                        "Connection": "keep-alive",
+                    }
+                )
+        except ImportError:
+            logger.debug("Workflows module not available, treating as agent ID")
+        except Exception as workflow_err:
+            logger.debug(f"Not a workflow: {workflow_err}")
+        
         # Get agent from Cosmos DB and create via factory
         agent = await get_agent(agent_id)
         
@@ -692,131 +754,4 @@ async def delete_thread(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================================
-# Multi-Agent Workflow Endpoints
-# ============================================================================
 
-@router.get("/workflows", tags=["Workflows"])
-async def list_workflows():
-    """
-    List all available workflows.
-    
-    Returns:
-        Dictionary of workflow_id -> workflow configuration
-        
-    Example Response:
-        {
-            "intelligent-handoff": {
-                "id": "intelligent-handoff",
-                "type": "handoff",
-                "name": "Intelligent Handoff Workflow",
-                "description": "...",
-                "coordinator": "router",
-                "participants": ["router", "data-agent", "analyst", "order-agent", "evaluator"],
-                "max_handoffs": 3,
-                "routing_rules": {...}
-            },
-            ...
-        }
-    """
-    try:
-        from src.agents.workflows import get_available_workflows
-        
-        workflows = get_available_workflows()
-        logger.info(f"Listed {len(workflows)} available workflows")
-        return workflows
-        
-    except Exception as e:
-        logger.error(f"Error listing workflows: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list workflows")
-
-
-@router.post("/workflows/{workflow_id}/chat", tags=["Workflows"])
-async def workflow_chat(
-    workflow_id: str = Path(..., description="ID of workflow to execute"),
-    request: Optional["ChatRequest"] = None,
-):
-    """
-    Execute a multi-agent workflow.
-    
-    Handles orchestration of multiple agents with intelligent routing,
-    quality evaluation, and optional re-routing.
-    
-    Args:
-        workflow_id: ID of workflow (e.g., "intelligent-handoff")
-        request: ChatRequest with message, thread_id, and optional max_handoffs
-        
-    Returns:
-        StreamingResponse with SSE events:
-        1. Status event (workflow starting)
-        2. Trace events (agent invocations)
-        3. Message event (final response)
-        4. Metadata event (handoff path, satisfaction score)
-        5. Done event
-        
-    Example Request:
-        {
-            "message": "Show me top customers and provide business insights",
-            "thread_id": "thread-xyz123",
-            "max_handoffs": 3
-        }
-        
-    TODO: Implement workflow execution
-    Current: Placeholder returning mock response
-    """
-    if request is None:
-        raise HTTPException(status_code=400, detail="Request body required")
-    
-    try:
-        from src.agents.workflows import validate_workflow_id, get_workflow_config
-        
-        logger.info(f"Workflow chat request: workflow={workflow_id}, thread={request.thread_id}")
-        
-        # Validate workflow exists
-        if not validate_workflow_id(workflow_id):
-            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not found")
-        
-        workflow_config = get_workflow_config(workflow_id)
-        if workflow_config is None:
-            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' configuration not found")
-        
-        logger.info(f"Workflow type: {workflow_config.get('type')}")
-        
-        # TODO: Implement full workflow execution
-        # For now, return placeholder streaming response
-        
-        async def event_generator():
-            """Generate SSE events for workflow execution."""
-            # Status event
-            yield f"event: status\ndata: {json.dumps({'status': 'workflow_starting', 'workflow_id': workflow_id})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Message event (placeholder)
-            yield f"event: message\ndata: {json.dumps({'message': f'Workflow {workflow_id} execution not yet implemented. Framework foundation is ready for Phase 3 continuation.'})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Metadata event
-            metadata = {
-                "workflow_id": workflow_id,
-                "thread_id": request.thread_id,
-                "handoff_path": [],
-                "total_handoffs": 0,
-                "satisfaction_score": None,
-                "evaluator_reasoning": "Placeholder - workflow orchestrator implementation pending"
-            }
-            yield f"event: metadata\ndata: {json.dumps(metadata)}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Done event
-            yield f"event: done\ndata: {json.dumps({'complete': True})}\n\n"
-        
-        return StreamingResponse(
-            event_generator(),
-            media_type="text/event-stream"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Workflow chat error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))

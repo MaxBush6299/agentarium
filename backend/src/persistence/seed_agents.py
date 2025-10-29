@@ -162,7 +162,30 @@ def get_default_agents() -> List[AgentMetadata]:
             version="1.0.0"
         ),
         
-        # 5. Microsoft Docs Agent (ACTIVE) - Documentation search
+        # 5. Evaluator Agent (ACTIVE) - Quality assessment and response evaluation
+        AgentMetadata(
+            id="evaluator",
+            name="Evaluator Agent",
+            description="Assesses response quality and satisfaction level. Evaluates specialist responses to determine if they meet requirements or if escalation/re-routing is needed.",
+            system_prompt=load_prompt("evaluator_prompt.txt"),
+            model="gpt-4o",
+            temperature=0.6,
+            max_tokens=2000,
+            max_messages=10,
+            tools=[],
+            capabilities=[
+                "response_evaluation",
+                "quality_assessment",
+                "satisfaction_scoring",
+                "escalation_determination",
+                "feedback_generation"
+            ],
+            status=AgentStatus.ACTIVE,
+            is_public=True,
+            version="1.0.0"
+        ),
+        
+        # 6. Microsoft Docs Agent (ACTIVE) - Documentation search
         AgentMetadata(
             id="microsoft-docs",
             name="Microsoft Docs Agent",

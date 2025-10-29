@@ -145,9 +145,24 @@ export const streamChat = async (
     traceEventCallback = undefined
   }
 
+  let timeoutId: NodeJS.Timeout | undefined
+  
   try {
     const token = await getAccessToken()
-    const url = `${config.apiBaseUrl}/agents/${agentId}/chat`
+    
+    // Determine if this is a workflow or agent based on known workflow IDs
+    const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+    const isWorkflow = workflowIds.includes(agentId)
+    
+    const url = isWorkflow 
+      ? `${config.apiBaseUrl}/workflows/${agentId}/chat`
+      : `${config.apiBaseUrl}/agents/${agentId}/chat`
+    
+    // Create AbortController with timeout for streaming requests
+    // Workflows may take longer than regular agent requests
+    const timeoutMs = isWorkflow ? 180000 : 60000 // 3 min for workflows, 1 min for agents
+    const controller = new AbortController()
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs)
     
     const response = await fetch(url, {
       method: 'POST',
@@ -160,6 +175,7 @@ export const streamChat = async (
         thread_id: threadId,
         stream: true,
       }),
+      signal: controller.signal,
     })
 
     if (!response.ok) {
@@ -213,7 +229,12 @@ export const streamChat = async (
                 const chunk = parsed.content
                 fullMessage += chunk
                 onChunk(chunk)
-              } else if (parsed.type === 'done') {
+              } else if (parsed.message) {
+                // Handle message events from backend (both agents and workflows)
+                // Backend sends: { "message": "..." }
+                fullMessage = parsed.message
+                onChunk(parsed.message)
+              } else if (parsed.type === 'done' || parsed.complete) {
                 completeCallback?.(fullMessage)
                 return
               } else if (parsed.type === 'error') {
@@ -225,6 +246,19 @@ export const streamChat = async (
                   traceEventCallback(parsed)
                 }
                 console.debug('Received trace event:', parsed.type)
+              } else if (parsed.workflow_type || parsed.workflow_id) {
+                // Handle workflow metadata events - convert to trace events for display
+                // Example: { workflow_id: 'sequential-data-analysis', workflow_type: 'sequential', pattern: '...', ... }
+                const traceEvent = {
+                  type: 'trace_end',
+                  tool_name: parsed.pattern || `${parsed.workflow_type} workflow`,
+                  step_id: parsed.workflow_id,
+                  metadata: parsed,
+                }
+                if (traceEventCallback) {
+                  traceEventCallback(traceEvent)
+                }
+                console.debug('Received workflow metadata:', parsed.workflow_type)
               } else if (parsed.type === 'heartbeat') {
                 // Ignore heartbeat events
                 console.debug('Received heartbeat')
@@ -242,5 +276,10 @@ export const streamChat = async (
     completeCallback?.(fullMessage)
   } catch (error) {
     errorCallback?.(error instanceof Error ? error : new Error(String(error)))
+  } finally {
+    // Clean up timeout
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
   }
 }

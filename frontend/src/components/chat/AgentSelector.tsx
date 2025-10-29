@@ -1,24 +1,29 @@
 /**
  * AgentSelector Component
  * 
- * Dropdown menu for selecting and switching between active agents.
- * - Fetches agent list from /api/agents on mount
- * - Displays agent names with status badges
- * - Handles agent switching (clears current conversation)
- * - Filters to show only active agents
+ * Unified selector for both individual agents and multi-agent workflows.
+ * 
+ * Structure:
+ * - INDIVIDUAL AGENTS section (data-agent, analyst, order-agent, etc.)
+ * - MULTI-AGENT WORKFLOWS section (intelligent-handoff, sequential, etc.)
+ * 
+ * - Fetches both agents and workflows from API on mount
+ * - Displays status badges and workflow type indicators
+ * - Handles switching between agents and workflows
+ * - Filters to show only active agents (workflows always available)
  */
 
 import { useEffect, useState, useRef } from 'react'
 import {
   Dropdown,
   Option,
+  OptionGroup,
   makeStyles,
   useId,
   Spinner,
   Text,
   Badge,
 } from '@fluentui/react-components'
-import { ChevronDown24Regular } from '@fluentui/react-icons'
 import { Agent } from '@/types/agent'
 import { getAgents } from '@/services/agentsService'
 
@@ -31,91 +36,143 @@ const useStyles = makeStyles({
   dropdown: {
     minWidth: '200px',
   },
-  option: {
+  optionContent: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '8px',
+    width: '100%',
   },
-  agentName: {
+  optionLabel: {
     flex: 1,
   },
   badge: {
     fontSize: '12px',
-  },
-  triggerButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
   },
   loadingSpinner: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
   },
+  sectionHeader: {
+    paddingLeft: '8px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'var(--colorNeutralForeground3)',
+    textTransform: 'uppercase',
+  },
 })
 
 interface AgentSelectorProps {
   selectedAgentId?: string
-  onAgentChange: (agentId: string) => void
+  selectedWorkflowId?: string
+  onAgentChange?: (agentId: string) => void
+  onWorkflowChange?: (workflowId: string) => void
   disabled?: boolean
 }
 
+interface Workflow {
+  id: string
+  name: string
+  type: 'handoff' | 'sequential' | 'parallel' | 'approval_chain'
+  description?: string
+}
+
 /**
- * AgentSelector: Dropdown menu for switching between agents
+ * AgentSelector: Unified dropdown for agents and workflows
  */
 export const AgentSelector: React.FC<AgentSelectorProps> = ({
   selectedAgentId,
+  selectedWorkflowId,
   onAgentChange,
+  onWorkflowChange,
   disabled = false,
 }) => {
   const styles = useStyles()
   const [agents, setAgents] = useState<Agent[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [selectedValue, setSelectedValue] = useState<string>('')
+  const [selectedLabel, setSelectedLabel] = useState<string>('Select Agent or Workflow')
   const dropdownId = useId()
   const initialFetchRef = useRef(true)
 
-  // Fetch agents on component mount
+  // Fetch agents and workflows on component mount
   useEffect(() => {
     if (!initialFetchRef.current) return
 
-    const fetchAgents = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true)
         setError(null)
-        const response = await getAgents(0, 100)
-        setAgents(response.agents)
 
-        // Set initial selected agent
-        if (selectedAgentId && response.agents.length > 0) {
-          const agent = response.agents.find((a) => a.id === selectedAgentId)
+        // Fetch agents
+        const agentResponse = await getAgents(0, 100)
+        setAgents(agentResponse.agents)
+
+        // Set initial agent if needed
+        if (selectedAgentId && agentResponse.agents.length > 0) {
+          const agent = agentResponse.agents.find((a) => a.id === selectedAgentId)
           if (agent) {
-            setSelectedAgent(agent)
+            setSelectedLabel(agent.name)
+            setSelectedValue(`agent:${agent.id}`)
           }
         }
+
+        // Set initial workflow if needed
+        try {
+          const workflowResponse = await fetch('/api/workflows')
+          if (workflowResponse.ok) {
+            const workflowData = await workflowResponse.json()
+            const workflowList: Workflow[] = Object.values(workflowData)
+            setWorkflows(workflowList)
+
+            if (selectedWorkflowId && workflowList.length > 0) {
+              const workflow = workflowList.find((w) => w.id === selectedWorkflowId)
+              if (workflow) {
+                setSelectedLabel(workflow.name)
+                setSelectedValue(`workflow:${workflow.id}`)
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Could not fetch workflows:', err)
+          // Workflows are optional, continue anyway
+        }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load agents'
+        const message = err instanceof Error ? err.message : 'Failed to load agents and workflows'
         setError(message)
-        console.error('Failed to fetch agents:', err)
+        console.error('Failed to fetch data:', err)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchAgents()
+    fetchData()
     initialFetchRef.current = false
-  }, [selectedAgentId])
+  }, [selectedAgentId, selectedWorkflowId])
 
-  // Handle agent selection from dropdown
-  const handleAgentChange = (agentId: string | null) => {
-    if (!agentId) return
+  // Handle selection from dropdown
+  const handleChange = (value: string | null) => {
+    if (!value) return
 
-    const agent = agents.find((a) => a.id === agentId)
-    if (agent) {
-      setSelectedAgent(agent)
-      onAgentChange(agent.id)
+    const [type, id] = value.split(':')
+
+    if (type === 'agent' && onAgentChange) {
+      const agent = agents.find((a) => a.id === id)
+      if (agent) {
+        setSelectedLabel(agent.name)
+        setSelectedValue(value)
+        onAgentChange(agent.id)
+      }
+    } else if (type === 'workflow' && onWorkflowChange) {
+      const workflow = workflows.find((w) => w.id === id)
+      if (workflow) {
+        setSelectedLabel(workflow.name)
+        setSelectedValue(value)
+        onWorkflowChange(workflow.id)
+      }
     }
   }
 
@@ -123,7 +180,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     return (
       <div className={styles.loadingSpinner}>
         <Spinner size="tiny" />
-        <Text size={200}>Loading agents...</Text>
+        <Text size={200}>Loading...</Text>
       </div>
     )
   }
@@ -132,16 +189,19 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     return (
       <div className={styles.root}>
         <Text size={200} style={{ color: 'var(--colorStatusDangerForeground1)' }}>
-          ⚠ Failed to load agents
+          ⚠ {error}
         </Text>
       </div>
     )
   }
 
-  if (agents.length === 0) {
+  const hasAgents = agents.length > 0
+  const hasWorkflows = workflows.length > 0
+
+  if (!hasAgents && !hasWorkflows) {
     return (
       <div className={styles.root}>
-        <Text size={200}>No agents available</Text>
+        <Text size={200}>No agents or workflows available</Text>
       </div>
     )
   }
@@ -151,32 +211,60 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
       <Dropdown
         id={dropdownId}
         className={styles.dropdown}
-        value={selectedAgent?.id}
-        onOptionSelect={(_, data) => handleAgentChange(data.optionValue || null)}
+        value={selectedValue}
+        onOptionSelect={(_, data) => handleChange(data.optionValue || null)}
         disabled={disabled || isLoading}
         button={{
-          children: (
-            <div className={styles.triggerButton}>
-              <span>{selectedAgent?.name || 'Select Agent'}</span>
-              <ChevronDown24Regular />
-            </div>
-          ),
+          children: selectedLabel,
         }}
       >
-        {agents.map((agent) => (
-          <Option key={agent.id} value={agent.id} text={agent.name}>
-            <div className={styles.option}>
-              <span className={styles.agentName}>{agent.name}</span>
-              <Badge
-                className={styles.badge}
-                appearance={agent.status === 'active' ? 'filled' : 'outline'}
-                color={agent.status === 'active' ? 'success' : 'warning'}
+        {/* Individual Agents Section */}
+        {hasAgents && (
+          <OptionGroup label="INDIVIDUAL AGENTS">
+            {agents.map((agent) => (
+              <Option
+                key={agent.id}
+                value={`agent:${agent.id}`}
+                text={agent.name}
               >
-                {agent.status}
-              </Badge>
-            </div>
-          </Option>
-        ))}
+                <div className={styles.optionContent}>
+                  <span className={styles.optionLabel}>{agent.name}</span>
+                  <Badge
+                    className={styles.badge}
+                    appearance={agent.status === 'active' ? 'filled' : 'outline'}
+                    color={agent.status === 'active' ? 'success' : 'warning'}
+                  >
+                    {agent.status}
+                  </Badge>
+                </div>
+              </Option>
+            ))}
+          </OptionGroup>
+        )}
+
+        {/* Multi-Agent Workflows Section */}
+        {hasWorkflows && (
+          <OptionGroup label="MULTI-AGENT WORKFLOWS">
+            {workflows.map((workflow) => (
+              <Option
+                key={workflow.id}
+                value={`workflow:${workflow.id}`}
+                text={workflow.name}
+              >
+                <div className={styles.optionContent}>
+                  <span className={styles.optionLabel}>{workflow.name}</span>
+                  <Badge
+                    className={styles.badge}
+                    appearance="filled"
+                    color="informative"
+                  >
+                    {workflow.type}
+                  </Badge>
+                </div>
+              </Option>
+            ))}
+          </OptionGroup>
+        )}
       </Dropdown>
     </div>
   )

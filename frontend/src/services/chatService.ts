@@ -5,7 +5,7 @@
 
 import { Message, ChatThread, StreamEvent } from '@/types/chat'
 import { getAccessToken } from './authService'
-import { apiGet, apiPost, apiDelete } from './api'
+import { apiGet, apiPost, apiDelete, apiPut } from './api'
 import { config } from '@/config'
 
 const CHAT_ENDPOINT = '/agents'
@@ -115,7 +115,7 @@ export const streamChat = async (
 }
 
 /**
- * List all threads for an agent
+ * List all threads for an agent or workflow
  */
 export const listThreads = async (agentId: string, limit?: number): Promise<ChatThread[]> => {
   const params = new URLSearchParams()
@@ -124,7 +124,16 @@ export const listThreads = async (agentId: string, limit?: number): Promise<Chat
   }
   
   const query = params.toString() ? `?${params.toString()}` : ''
-  const response = await apiGet<{ threads: ChatThread[]; total: number; page: number; page_size: number }>(`/agents/${agentId}/threads${query}`)
+  
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads${query}`
+    : `/agents/${agentId}/threads${query}`
+  
+  const response = await apiGet<{ threads: ChatThread[]; total: number; page: number; page_size: number }>(endpoint)
   return response.threads
 }
 
@@ -132,21 +141,60 @@ export const listThreads = async (agentId: string, limit?: number): Promise<Chat
  * Get chat thread history
  */
 export const getChatThread = async (agentId: string, threadId: string): Promise<ChatThread> => {
-  return apiGet<ChatThread>(`/agents/${agentId}/threads/${threadId}`)
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads/${threadId}`
+    : `/agents/${agentId}/threads/${threadId}`
+  
+  return apiGet<ChatThread>(endpoint)
 }
 
 /**
  * Create new chat thread
  */
-export const createChatThread = async (agentId: string): Promise<ChatThread> => {
-  return apiPost<ChatThread>(`/agents/${agentId}/threads`, { agentId })
+export const createChatThread = async (agentId: string, title?: string): Promise<ChatThread> => {
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads`
+    : `/agents/${agentId}/threads`
+  
+  return apiPost<ChatThread>(endpoint, { agentId, title })
 }
 
 /**
  * Delete chat thread
  */
 export const deleteChatThread = async (agentId: string, threadId: string): Promise<void> => {
-  await apiDelete(`/agents/${agentId}/threads/${threadId}`)
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads/${threadId}`
+    : `/agents/${agentId}/threads/${threadId}`
+  
+  await apiDelete(endpoint)
+}
+
+/**
+ * Update chat thread (title, metadata, etc)
+ */
+export const updateChatThread = async (agentId: string, threadId: string, updates: { title?: string }): Promise<ChatThread> => {
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads/${threadId}`
+    : `/agents/${agentId}/threads/${threadId}`
+  
+  return apiPut<ChatThread>(endpoint, updates)
 }
 
 /**
@@ -171,3 +219,24 @@ export const exportChatThread = async (agentId: string, threadId: string): Promi
 
   return response.json()
 }
+
+/**
+ * Save a message to a thread (for workflows or agents)
+ */
+export const saveThreadMessage = async (
+  agentId: string,
+  threadId: string,
+  message: string,
+  role: 'user' | 'assistant' = 'assistant'
+): Promise<ChatThread> => {
+  // Check if this is a workflow ID or agent ID
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const isWorkflow = workflowIds.includes(agentId)
+  
+  const endpoint = isWorkflow 
+    ? `/workflows/${agentId}/threads/${threadId}/messages`
+    : `/agents/${agentId}/threads/${threadId}/messages`
+  
+  return apiPost<ChatThread>(endpoint, { message, role })
+}
+

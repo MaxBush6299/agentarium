@@ -39,6 +39,7 @@ class ThreadRepository:
         agent_id: str,
         user_id: Optional[str] = None,
         workflow_id: Optional[str] = None,
+        title: Optional[str] = None,
         metadata: Optional[dict] = None
     ) -> Thread:
         """
@@ -48,6 +49,7 @@ class ThreadRepository:
             agent_id: ID of the agent for this thread
             user_id: Optional user ID
             workflow_id: Optional workflow ID if thread is part of a multi-agent workflow
+            title: Optional title for the thread
             metadata: Optional metadata dictionary
             
         Returns:
@@ -60,6 +62,7 @@ class ThreadRepository:
             agent_id=agent_id,
             workflow_id=workflow_id,
             user_id=user_id,
+            title=title,
             messages=[],
             runs=[],
             status="active",

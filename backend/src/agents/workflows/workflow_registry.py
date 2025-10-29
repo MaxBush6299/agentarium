@@ -68,6 +68,28 @@ WORKFLOW_REGISTRY = {
             "tags": ["multi-agent", "handoff", "evaluation", "quality-control"],
         }
     },
+    "sequential-data-analysis": {
+        "id": "sequential-data-analysis",
+        "type": "sequential",
+        "name": "Sequential Data Analysis",
+        "description": "Sequential pipeline: data-agent retrieves data → analyst performs analysis. Each agent receives output from previous agent as context.",
+        "active": True,
+        "coordinator": None,  # Sequential workflows don't need coordinator
+        "participants": [
+            "data-agent",       # Step 1: Data retrieval
+            "analyst",          # Step 2: Analysis and insights
+        ],
+        "max_handoffs": 1,     # Sequential, no loops
+        "routing_rules": {
+            "sequence": ["data-agent", "analyst"],
+            "pass_output_as_input": True,  # Each step receives previous output
+        },
+        "metadata": {
+            "version": "1.0.0",
+            "created_at": "2025-10-29",
+            "tags": ["sequential", "data-driven", "analysis"],
+        }
+    },
     "data-analysis-pipeline": {
         "id": "data-analysis-pipeline",
         "type": "sequential",

@@ -20,7 +20,7 @@ import { Message, MessageRole } from '../types/message'
 import { ChatThread } from '../types/chat'
 import { useTraces } from '../hooks/useTraces'
 import { streamChat } from '../services/api'
-import { getChatThread } from '../services/chatService'
+import { getChatThread, createChatThread, saveThreadMessage, updateChatThread } from '../services/chatService'
 
 const useStyles = makeStyles({
   container: {
@@ -85,6 +85,7 @@ const useStyles = makeStyles({
 
 interface LocationState {
   agentId?: string
+  workflowId?: string
 }
 
 /**
@@ -101,8 +102,9 @@ export const ChatPage = () => {
   const locationState = location.state as LocationState
   
   // Agent and conversation state
-  // Default to Router agent - the intelligent multi-agent orchestrator
-  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || 'router')
+  // Default to Sequential Data Analysis workflow
+  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || 'sequential-data-analysis')
+  const [currentWorkflowId, setCurrentWorkflowId] = useState<string | null>(locationState?.workflowId || 'sequential-data-analysis')
   const [conversationName, setConversationName] = useState<string>('')
   
   // Chat state
@@ -142,6 +144,7 @@ export const ChatPage = () => {
   // Handle agent change
   const handleAgentChange = (agentId: string) => {
     setCurrentAgentId(agentId)
+    setCurrentWorkflowId(null)  // Clear workflow when switching agents
     
     // Clear conversation and create new thread for new agent
     setMessages([])
@@ -149,6 +152,19 @@ export const ChatPage = () => {
     setConversationName('')
 
     console.log('Switched to agent:', agentId)
+  }
+
+  // Handle workflow change
+  const handleWorkflowChange = (workflowId: string) => {
+    setCurrentWorkflowId(workflowId)
+    setCurrentAgentId(workflowId)  // Use workflow ID as the primary identifier
+    
+    // Clear conversation and create new thread for new workflow
+    setMessages([])
+    clearTraces()
+    setConversationName('')
+
+    console.log('Switched to workflow:', workflowId)
   }
 
   // Handle thread selection/switching
@@ -187,21 +203,54 @@ export const ChatPage = () => {
   const handleNameChange = async (newName: string) => {
     setConversationName(newName)
     
-    // TODO: Save to thread metadata via API
-    // if (threadId) {
-    //   try {
-    //     await updateChatThread(currentAgentId, threadId, { title: newName })
-    //   } catch (error) {
-    //     console.error('Failed to save conversation name:', error)
-    //     throw error
-    //   }
-    // }
+    // Save to thread metadata via API
+    if (threadId && currentAgentId) {
+      try {
+        await updateChatThread(currentAgentId, threadId, { title: newName })
+      } catch (error) {
+        console.error('Failed to save conversation name:', error)
+        throw error
+      }
+    }
+  }
+
+  // Save user and assistant messages to thread
+  const saveMessagesToThread = async (threadId: string, userMessage: string, assistantMessage: string) => {
+    try {
+      // Save user message
+      await saveThreadMessage(currentAgentId, threadId, userMessage, 'user')
+      
+      // Save assistant message
+      await saveThreadMessage(currentAgentId, threadId, assistantMessage, 'assistant')
+      
+      console.log('Saved messages to thread:', threadId)
+    } catch (error) {
+      console.error('Failed to save messages to thread:', error)
+      // Don't throw - conversation should still work even if saving fails
+    }
   }
 
   const handleSendMessage = async (content: string) => {
     console.log('Sending message to agent:', currentAgentId)
     console.log('Message:', content)
     console.log('Thread ID:', threadId)
+    
+    // Create a thread if one doesn't exist
+    let activeThreadId = threadId
+    if (!activeThreadId) {
+      try {
+        const newThread = await createChatThread(currentAgentId, conversationName || undefined)
+        activeThreadId = newThread.id
+        console.log('Created new thread:', activeThreadId)
+        // Navigate to the new thread
+        navigate(`/chat/${activeThreadId}`, {
+          state: { agentId: currentAgentId },
+        })
+      } catch (error) {
+        console.error('Failed to create thread:', error)
+        // Continue anyway - can save messages later
+      }
+    }
     
     // Add user message
     const userMessage: Message = {
@@ -227,12 +276,13 @@ export const ChatPage = () => {
     clearTraces()
 
     console.log('Starting stream to:', `${currentAgentId}/chat`)
+    console.log('Using thread ID:', activeThreadId)
     
     try {
       await streamChat(
         currentAgentId,
         content,
-        threadId || null,
+        activeThreadId || null,
         // onChunk: Update message content as chunks arrive
         (chunk: string) => {
           setMessages((prev) =>
@@ -248,7 +298,7 @@ export const ChatPage = () => {
           const event = traceEvent as Record<string, unknown>
           addTraceEvent(event as any)
         },
-        // onComplete: Mark streaming as done
+        // onComplete: Mark streaming as done and save to thread
         (fullMessage: string) => {
           setMessages((prev) =>
             prev.map((msg) =>
@@ -258,6 +308,11 @@ export const ChatPage = () => {
             )
           )
           setIsLoading(false)
+          
+          // Save messages to thread if thread exists
+          if (activeThreadId) {
+            saveMessagesToThread(activeThreadId, content, fullMessage)
+          }
         },
         // onError: Show error message
         (error: Error) => {
@@ -334,7 +389,9 @@ export const ChatPage = () => {
           <div className={styles.chatHeaderActions}>
             <AgentSelector
               selectedAgentId={currentAgentId}
+              selectedWorkflowId={currentWorkflowId || undefined}
               onAgentChange={handleAgentChange}
+              onWorkflowChange={handleWorkflowChange}
               disabled={isLoading}
             />
             <ExportButton messages={messages} traces={traces} agentId={currentAgentId} />

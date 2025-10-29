@@ -11,7 +11,8 @@ import asyncio
 import json
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Path
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Path, Body
 from fastapi.responses import StreamingResponse
 
 from src.persistence.models import ChatRequest
@@ -121,33 +122,104 @@ async def execute_workflow(
         
         logger.info(f"Workflow type: {workflow_config.get('type')}")
         
-        # TODO: Implement full workflow execution
-        # For now, return placeholder streaming response
-        
+        # Execute the appropriate workflow
         async def event_generator():
             """Generate SSE events for workflow execution."""
-            # Status event
-            yield f"event: status\ndata: {json.dumps({'status': 'workflow_starting', 'workflow_id': workflow_id})}\n\n"
-            await asyncio.sleep(0.1)
+            try:
+                # Status event
+                yield f"event: status\ndata: {json.dumps({'status': 'workflow_starting', 'workflow_id': workflow_id})}\n\n"
+                await asyncio.sleep(0.1)
+                
+                # Execute based on workflow type
+                workflow_type = workflow_config.get('type', '')
+                
+                if workflow_type == 'handoff':
+                    # Import and execute handoff orchestrator
+                    from src.agents.workflows.handoff_orchestrator import HandoffOrchestrator
+                    
+                    # Create orchestrator with required parameters
+                    thread_id = request.thread_id or f"thread-{workflow_id}"
+                    orchestrator = HandoffOrchestrator(
+                        workflow_id=workflow_id,
+                        workflow_config=workflow_config
+                    )
+                    
+                    # Execute workflow
+                    final_response, trace_metadata = await orchestrator.execute(
+                        message=request.message,
+                        thread_id=thread_id
+                    )
+                    
+                    logger.info(f"Handoff workflow complete: path={trace_metadata.handoff_path}")
+                    
+                    # Message event with final response
+                    yield f"event: message\ndata: {json.dumps({'message': final_response})}\n\n"
+                    await asyncio.sleep(0.1)
+                    
+                    # Metadata event with trace
+                    metadata_dict = {
+                        'workflow_id': workflow_id,
+                        'thread_id': thread_id,
+                        'handoff_path': trace_metadata.handoff_path,
+                        'total_handoffs': trace_metadata.total_handoffs,
+                        'final_satisfaction_score': trace_metadata.final_satisfaction_score,
+                        'final_evaluator_reasoning': trace_metadata.final_evaluator_reasoning,
+                        'max_attempts_reached': trace_metadata.max_attempts_reached,
+                    }
+                    yield f"event: metadata\ndata: {json.dumps(metadata_dict)}\n\n"
+                    await asyncio.sleep(0.1)
+                
+                elif workflow_type == 'sequential':
+                    # Import and execute sequential orchestrator
+                    from src.agents.workflows.sequential_orchestrator import SequentialOrchestrator
+                    
+                    logger.info("Starting sequential workflow execution...")
+                    
+                    # Create orchestrator with required parameters
+                    thread_id = request.thread_id or f"thread-{workflow_id}"
+                    orchestrator = SequentialOrchestrator(
+                        workflow_id=workflow_id,
+                        workflow_config=workflow_config
+                    )
+                    
+                    logger.info("Orchestrator created, calling execute()...")
+                    
+                    # Execute workflow
+                    try:
+                        final_response, trace_metadata = await orchestrator.execute(
+                            message=request.message,
+                            thread_id=thread_id
+                        )
+                    except Exception as e:
+                        logger.error(f"Sequential workflow execution error: {e}", exc_info=True)
+                        raise
+                    
+                    logger.info(f"Sequential workflow complete: response_length={len(final_response)}")
+                    
+                    # Message event with final response
+                    yield f"event: message\ndata: {json.dumps({'message': final_response})}\n\n"
+                    await asyncio.sleep(0.1)
+                    
+                    # Metadata event with trace
+                    metadata_dict = {
+                        'workflow_id': workflow_id,
+                        'thread_id': thread_id,
+                        'workflow_type': workflow_type,
+                        'pattern': 'Sequential Pipeline',
+                        'execution_path': 'data-agent → analyst',
+                    }
+                    yield f"event: metadata\ndata: {json.dumps(metadata_dict)}\n\n"
+                    await asyncio.sleep(0.1)
+                
+                else:
+                    # Unknown workflow type
+                    yield f"event: message\ndata: {json.dumps({'message': f'Workflow type {workflow_type} not yet implemented'})}\n\n"
+                yield f"event: done\ndata: {json.dumps({'complete': True})}\n\n"
             
-            # Message event (placeholder)
-            yield f"event: message\ndata: {json.dumps({'message': f'Workflow {workflow_id} execution not yet implemented. Framework foundation is ready for Phase 3 continuation.'})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Metadata event
-            metadata = {
-                "workflow_id": workflow_id,
-                "thread_id": request.thread_id,
-                "handoff_path": [],
-                "total_handoffs": 0,
-                "satisfaction_score": None,
-                "evaluator_reasoning": "Placeholder - workflow orchestrator implementation pending"
-            }
-            yield f"event: metadata\ndata: {json.dumps(metadata)}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Done event
-            yield f"event: done\ndata: {json.dumps({'complete': True})}\n\n"
+            except Exception as e:
+                logger.error(f"Error in workflow event generator: {str(e)}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                yield f"event: done\ndata: {json.dumps({'complete': False})}\n\n"
         
         return StreamingResponse(
             event_generator(),
@@ -159,3 +231,296 @@ async def execute_workflow(
     except Exception as e:
         logger.error(f"Workflow chat error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{workflow_id}/threads", name="create_workflow_thread")
+async def create_workflow_thread(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    request: Optional[dict] = Body(None)
+):
+    """
+    Create a new chat thread for workflow execution.
+    
+    Args:
+        workflow_id: ID of the workflow
+        request: Optional request body with title
+        
+    Returns:
+        New thread object with empty messages
+    """
+    try:
+        from src.persistence.threads import get_thread_repository
+        
+        repo = get_thread_repository()
+        title = request.get("title") if request else None
+        
+        thread = await repo.create(
+            agent_id=workflow_id,
+            workflow_id=workflow_id,
+            title=title,
+            metadata={"workflow_type": "workflow"}
+        )
+        
+        logger.info(f"Created workflow thread: {thread.id}")
+        
+        return {
+            "id": thread.id,
+            "agent_id": thread.agent_id,
+            "title": thread.title or "Untitled",
+            "created_at": thread.created_at.isoformat(),
+            "updated_at": thread.updated_at.isoformat(),
+            "messages": [],
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating workflow thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{workflow_id}/threads", name="list_workflow_threads")
+async def list_workflow_threads(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    limit: int = 50
+):
+    """
+    List all threads for a workflow.
+    
+    Args:
+        workflow_id: ID of the workflow
+        limit: Maximum threads to return
+        
+    Returns:
+        Dictionary with threads list and metadata
+    """
+    try:
+        from src.persistence.threads import get_thread_repository
+        
+        repo = get_thread_repository()
+        threads = await repo.list(agent_id=workflow_id, limit=limit)
+        
+        logger.info(f"Found {len(threads)} threads for workflow {workflow_id}")
+        
+        return {
+            "threads": [
+                {
+                    "id": t.id,
+                    "agent_id": t.agent_id,
+                    "title": t.title or "Untitled",
+                    "created_at": t.created_at.isoformat(),
+                    "updated_at": t.updated_at.isoformat(),
+                    "messages": [],  # Don't include full message history in list
+                }
+                for t in threads
+            ],
+            "total": len(threads),
+            "page": 1,
+            "page_size": limit,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing workflow threads: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{workflow_id}/threads/{thread_id}", name="get_workflow_thread")
+async def get_workflow_thread(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    thread_id: str = Path(..., description="Thread ID")
+):
+    """
+    Get workflow thread details including messages.
+    
+    Args:
+        workflow_id: ID of the workflow
+        thread_id: ID of the thread
+        
+    Returns:
+        Thread object with full message history
+    """
+    try:
+        from src.persistence.threads import get_thread_repository
+        
+        repo = get_thread_repository()
+        thread = await repo.get(thread_id, workflow_id)
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
+        
+        logger.info(f"Retrieved workflow thread: {thread_id}")
+        
+        return {
+            "id": thread.id,
+            "agent_id": thread.agent_id,
+            "title": f"Conversation",
+            "created_at": thread.created_at.isoformat(),
+            "updated_at": thread.updated_at.isoformat(),
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp.isoformat() if hasattr(m, 'timestamp') else datetime.utcnow().isoformat(),
+                }
+                for m in thread.messages
+            ],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving workflow thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{workflow_id}/threads/{thread_id}", name="delete_workflow_thread")
+async def delete_workflow_thread(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    thread_id: str = Path(..., description="Thread ID")
+):
+    """
+    Delete a workflow thread.
+    
+    Args:
+        workflow_id: ID of the workflow
+        thread_id: ID of the thread
+    """
+    try:
+        from src.persistence.threads import get_thread_repository
+        
+        repo = get_thread_repository()
+        thread = await repo.get(thread_id, workflow_id)
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
+        
+        await repo.delete(thread_id, workflow_id)
+        
+        logger.info(f"Deleted workflow thread: {thread_id}")
+        
+        return {"status": "deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting workflow thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{workflow_id}/threads/{thread_id}", name="update_workflow_thread")
+async def update_workflow_thread(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    thread_id: str = Path(..., description="Thread ID"),
+    request: Optional[dict] = Body(None)
+):
+    """
+    Update a workflow thread (title, metadata, etc).
+    
+    Args:
+        workflow_id: ID of the workflow
+        thread_id: ID of the thread
+        request: Request body with fields to update (e.g., title)
+        
+    Returns:
+        Updated thread object
+    """
+    try:
+        from src.persistence.threads import get_thread_repository
+        
+        repo = get_thread_repository()
+        thread = await repo.get(thread_id, workflow_id)
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
+        
+        # Update fields from request
+        if request:
+            if "title" in request:
+                thread.title = request["title"]
+        
+        # Save updated thread
+        updated_thread = await repo.update(thread)
+        
+        logger.info(f"Updated workflow thread: {thread_id}")
+        
+        return {
+            "id": updated_thread.id,
+            "agent_id": updated_thread.agent_id,
+            "title": updated_thread.title or "Untitled",
+            "created_at": updated_thread.created_at.isoformat(),
+            "updated_at": updated_thread.updated_at.isoformat(),
+            "messages": [],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating workflow thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{workflow_id}/threads/{thread_id}/messages", name="add_workflow_thread_message")
+async def add_workflow_thread_message(
+    workflow_id: str = Path(..., description="Workflow ID"),
+    thread_id: str = Path(..., description="Thread ID"),
+    request: Optional[ChatRequest] = None
+):
+    """
+    Add a message to a workflow thread.
+    
+    Args:
+        workflow_id: ID of the workflow
+        thread_id: ID of the thread
+        request: Chat request with message and role
+        
+    Returns:
+        Updated thread object
+    """
+    if request is None:
+        raise HTTPException(status_code=400, detail="Request body required")
+    
+    try:
+        from src.persistence.threads import get_thread_repository
+        from src.persistence.models import Message
+        
+        repo = get_thread_repository()
+        thread = await repo.get(thread_id, workflow_id)
+        
+        if not thread:
+            raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
+        
+        # Create message
+        message = Message(
+            id=f"msg_{int(asyncio.get_event_loop().time() * 1000)}",
+            role=getattr(request, 'role', 'assistant'),  # Default to 'assistant' if not provided
+            content=request.message,
+            timestamp=datetime.utcnow()
+        )
+        
+        # Add message to thread
+        updated_thread = await repo.add_message(thread_id, workflow_id, message, thread)
+        
+        logger.info(f"Added message to workflow thread: {thread_id}")
+        
+        return {
+            "id": updated_thread.id,
+            "agent_id": updated_thread.agent_id,
+            "title": f"Conversation",
+            "created_at": updated_thread.created_at.isoformat(),
+            "updated_at": updated_thread.updated_at.isoformat(),
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp.isoformat() if hasattr(m, 'timestamp') else datetime.utcnow().isoformat(),
+                }
+                for m in updated_thread.messages
+            ],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding message to workflow thread: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
