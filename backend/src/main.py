@@ -175,6 +175,11 @@ from src.api.models import router as models_router
 app.include_router(models_router)  # Models API at /api/models
 logger.info("Models API router registered")
 
+# Include Workflows API Router
+from src.api.workflows import router as workflows_router
+app.include_router(workflows_router)  # Workflows API at /api/workflows
+logger.info("Workflows API router registered")
+
 
 # Health Check Endpoint
 @app.get("/health", tags=["Health"])

@@ -47,6 +47,7 @@ WORKFLOW_REGISTRY = {
         "type": "handoff",
         "name": "Intelligent Handoff Workflow",
         "description": "Multi-tier routing with quality evaluation and intelligent re-routing. Routes queries through specialists (data-agent, analyst, order-agent) with quality evaluation at the end. If evaluator determines response is unsatisfactory, routes back to router for another attempt.",
+        "active": False,
         "coordinator": "router",
         "participants": [
             "router",           # Entry point and re-routing coordinator
@@ -72,6 +73,7 @@ WORKFLOW_REGISTRY = {
         "type": "sequential",
         "name": "Data Analysis Pipeline",
         "description": "Sequential processing pipeline: data-agent retrieves data → analyst performs analysis → evaluator validates results. Each agent receives output from previous.",
+        "active": False,
         "coordinator": None,  # Sequential workflows don't need coordinator
         "participants": [
             "data-agent",       # Step 1: Data retrieval
@@ -94,6 +96,7 @@ WORKFLOW_REGISTRY = {
         "type": "parallel",
         "name": "Multi-Perspective Analysis",
         "description": "Parallel analysis: query is sent to data-agent, analyst, and order-agent simultaneously. Results are merged and evaluated. Useful for comprehensive business analysis.",
+        "active": False,
         "coordinator": None,  # Parallel workflows use merge logic
         "participants": [
             "data-agent",       # Perspective 1: Data view
@@ -118,6 +121,7 @@ WORKFLOW_REGISTRY = {
         "type": "approval_chain",
         "name": "Change Approval Workflow",
         "description": "Sequential approval workflow for operational changes. Request → Data validation → Manager review → Execution. Can be rejected at any stage.",
+        "active": False,
         "coordinator": "router",  # Router can restart/escalate
         "participants": [
             "data-agent",       # Validate request data
@@ -146,12 +150,16 @@ WORKFLOW_REGISTRY = {
 
 def get_available_workflows() -> Dict[str, Dict[str, Any]]:
     """
-    Get all available workflows.
+    Get all active available workflows.
     
     Returns:
-        Dictionary mapping workflow_id to workflow configuration
+        Dictionary mapping workflow_id to workflow configuration (only active workflows)
     """
-    return WORKFLOW_REGISTRY.copy()
+    return {
+        workflow_id: config 
+        for workflow_id, config in WORKFLOW_REGISTRY.items()
+        if config.get("active", False)
+    }
 
 
 def get_workflow_config(workflow_id: str) -> Optional[Dict[str, Any]]:
