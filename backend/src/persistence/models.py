@@ -210,9 +210,20 @@ class Thread(BaseModel):
     """
     A conversation thread between a user and an agent.
     Contains message history and run history.
+    
+    Can be tied to either:
+    - Individual agent (agent_id only)
+    - Multi-agent workflow (both agent_id and workflow_id)
     """
     id: str = Field(description="Unique thread ID")
     agent_id: str = Field(alias="agentId", description="Agent ID for this thread")
+    
+    # Workflow context (optional)
+    workflow_id: Optional[str] = Field(
+        default=None,
+        alias="workflowId",
+        description="Workflow ID if this thread is part of a multi-agent workflow"
+    )
     
     # Thread metadata
     title: Optional[str] = Field(default=None, description="Thread title (auto-generated from first message)")
@@ -245,6 +256,7 @@ class Thread(BaseModel):
                 "agent_id": "support-triage",
                 "title": "How to create Azure storage account",
                 "user_id": "user_123",
+                "workflow_id": None,
                 "messages": [
                     {
                         "id": "msg_123",
