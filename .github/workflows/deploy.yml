@@ -46,6 +46,12 @@ jobs:
         echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
         echo "Building version v$NEW_VERSION"
     
+    - name: Generate timestamp for revision
+      id: timestamp
+      run: |
+        TIMESTAMP=$(date +%s)
+        echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
+    
     - name: Build and push backend image
       run: |
         az acr build \
@@ -60,7 +66,8 @@ jobs:
         az containerapp update \
           --name ${{ env.BACKEND_APP_NAME }} \
           --resource-group ${{ env.RESOURCE_GROUP }} \
-          --image ${{ steps.acr.outputs.login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          --image ${{ steps.acr.outputs.login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }} \
+          --set-env-vars DEPLOY_TIMESTAMP=${{ steps.timestamp.outputs.value }}
           
     - name: Verify backend deployment
       run: |
@@ -100,6 +107,12 @@ jobs:
         echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
         echo "Building version v$NEW_VERSION"
     
+    - name: Generate timestamp for revision
+      id: timestamp
+      run: |
+        TIMESTAMP=$(date +%s)
+        echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
+    
     - name: Build and push frontend image
       run: |
         az acr build \
@@ -115,7 +128,8 @@ jobs:
         az containerapp update \
           --name ${{ env.FRONTEND_APP_NAME }} \
           --resource-group ${{ env.RESOURCE_GROUP }} \
-          --image ${{ steps.acr.outputs.login_server }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          --image ${{ steps.acr.outputs.login_server }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.version.outputs.tag }} \
+          --set-env-vars DEPLOY_TIMESTAMP=${{ steps.timestamp.outputs.value }}
           
     - name: Verify frontend deployment
       run: |
