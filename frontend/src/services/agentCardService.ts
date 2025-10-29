@@ -206,6 +206,78 @@ export class AgentCardService {
     
     return response.json();
   }
+
+  /**
+   * List all workflows
+   */
+  async listWorkflows(): Promise<Record<string, any>> {
+    const response = await fetch(`${this.baseUrl}/api/workflows/`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to list workflows: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get details of a specific workflow by ID
+   */
+  async getWorkflow(workflowId: string): Promise<Record<string, any>> {
+    const response = await fetch(`${this.baseUrl}/api/workflows/${workflowId}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Workflow not found: ${workflowId}`);
+      }
+      throw new Error(`Failed to get workflow: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Create a new workflow (if supported by backend)
+   */
+  async createWorkflow(request: Record<string, any>): Promise<Record<string, any>> {
+    const response = await fetch(`${this.baseUrl}/api/workflows/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(`Failed to create workflow: ${error.detail || response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Update an existing workflow (if supported by backend)
+   */
+  async updateWorkflow(workflowId: string, request: Record<string, any>): Promise<Record<string, any>> {
+    const response = await fetch(`${this.baseUrl}/api/workflows/${workflowId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Workflow not found: ${workflowId}`);
+      }
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(`Failed to update workflow: ${error.detail || response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
 
 // Example usage:
