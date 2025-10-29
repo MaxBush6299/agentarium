@@ -362,6 +362,7 @@ class AgentMetadata(BaseModel):
     # Status and visibility
     status: AgentStatus = Field(default=AgentStatus.ACTIVE, description="Agent status")
     is_public: bool = Field(default=True, description="Whether agent is visible to all users")
+    coordinator_only: bool = Field(default=False, description="If True, agent is only available as workflow coordinator, not for direct chat")
     
     # Metadata
     created_by: str = Field(default="system", description="Creator user ID")

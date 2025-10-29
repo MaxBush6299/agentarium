@@ -119,6 +119,7 @@ class AgentRepository:
         self,
         status: Optional[AgentStatus] = None,
         is_public: Optional[bool] = None,
+        coordinator_only: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[AgentMetadata]:
@@ -128,6 +129,7 @@ class AgentRepository:
         Args:
             status: Filter by status (active, inactive, maintenance)
             is_public: Filter by visibility
+            coordinator_only: Filter by coordinator-only flag (True/False/None for no filter)
             limit: Maximum number of agents to return
             offset: Number of agents to skip
             
@@ -146,6 +148,10 @@ class AgentRepository:
             query += " AND c.is_public = @is_public"
             parameters.append({"name": "@is_public", "value": is_public})
         
+        if coordinator_only is not None:
+            query += " AND c.coordinator_only = @coordinator_only"
+            parameters.append({"name": "@coordinator_only", "value": coordinator_only})
+        
         query += " ORDER BY c.created_at DESC"
         query += f" OFFSET {offset} LIMIT {limit}"
         
@@ -163,7 +169,7 @@ class AgentRepository:
                     item["etag"] = item.pop("_etag")
                 agents.append(AgentMetadata(**item))
             
-            logger.debug(f"Listed {len(agents)} agents (status={status}, is_public={is_public})")
+            logger.debug(f"Listed {len(agents)} agents (status={status}, is_public={is_public}, coordinator_only={coordinator_only})")
             return agents
             
         except Exception as e:
@@ -173,7 +179,8 @@ class AgentRepository:
     def count(
         self,
         status: Optional[AgentStatus] = None,
-        is_public: Optional[bool] = None
+        is_public: Optional[bool] = None,
+        coordinator_only: Optional[bool] = None
     ) -> int:
         """
         Count agents with optional filtering.
@@ -181,6 +188,7 @@ class AgentRepository:
         Args:
             status: Filter by status
             is_public: Filter by visibility
+            coordinator_only: Filter by coordinator-only flag
             
         Returns:
             Number of matching agents
@@ -196,6 +204,10 @@ class AgentRepository:
         if is_public is not None:
             query += " AND c.is_public = @is_public"
             parameters.append({"name": "@is_public", "value": is_public})
+        
+        if coordinator_only is not None:
+            query += " AND c.coordinator_only = @coordinator_only"
+            parameters.append({"name": "@coordinator_only", "value": coordinator_only})
         
         try:
             items = list(self.container.query_items(

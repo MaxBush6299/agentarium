@@ -59,6 +59,8 @@ def get_default_agents() -> List[AgentMetadata]:
     """
     return [
         # 1. Router Agent (ACTIVE) - Multi-agent orchestrator
+        # COORDINATOR ONLY: Not available for direct chat (/api/agents/router/chat)
+        # Available only via workflow endpoints (/api/workflows/*/chat)
         AgentMetadata(
             id="router",
             name="Router Agent",
@@ -77,6 +79,7 @@ def get_default_agents() -> List[AgentMetadata]:
             ],
             status=AgentStatus.ACTIVE,
             is_public=True,
+            coordinator_only=True,
             version="2.0.0"
         ),
         

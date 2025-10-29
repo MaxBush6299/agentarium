@@ -82,17 +82,19 @@ def test_put(agent_id: str = Path(...)):
 def list_agents(
     status: Optional[AgentStatus] = Query(default=AgentStatus.ACTIVE, description="Filter by status"),
     is_public: Optional[bool] = Query(default=None, description="Filter by visibility"),
+    include_coordinator: bool = Query(default=False, description="Include coordinator-only agents"),
     limit: int = Query(default=50, ge=1, le=100, description="Maximum number of agents to return"),
     offset: int = Query(default=0, ge=0, description="Number of agents to skip"),
     repo = Depends(get_agent_repo)
 ):
     """
     List all agents with optional filtering.
-    By default, only active agents are returned.
+    By default, only active agents are returned (excluding coordinator-only agents).
     
     Query Parameters:
     - status: Filter by agent status (active, inactive, maintenance) - defaults to active
     - is_public: Filter by visibility (true for public, false for private)
+    - include_coordinator: Include coordinator-only agents (default: false)
     - limit: Maximum number of agents to return (1-100, default 50)
     - offset: Number of agents to skip for pagination (default 0)
     
@@ -114,6 +116,9 @@ def list_agents(
             mock_agents = [a for a in mock_agents if a.status == status]
         if is_public is not None:
             mock_agents = [a for a in mock_agents if a.is_public == is_public]
+        # Exclude coordinator-only agents unless explicitly requested
+        if not include_coordinator:
+            mock_agents = [a for a in mock_agents if not a.coordinator_only]
         
         # Apply pagination
         total = len(mock_agents)
@@ -127,16 +132,19 @@ def list_agents(
         )
     
     try:
-        # Get agents
+        # Get agents - exclude coordinator-only unless explicitly requested
+        coordinator_only_filter = False if not include_coordinator else None
+        
         agents = repo.list(
             status=status,
             is_public=is_public,
+            coordinator_only=coordinator_only_filter,
             limit=limit,
             offset=offset
         )
         
         # Get total count
-        total = repo.count(status=status, is_public=is_public)
+        total = repo.count(status=status, is_public=is_public, coordinator_only=coordinator_only_filter)
         
         return AgentListResponse(
             agents=agents,

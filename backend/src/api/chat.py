@@ -137,6 +137,13 @@ async def chat_with_agent(
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
         
+        # Reject router agent for direct chat (coordinator-only)
+        if agent_id == "router":
+            raise HTTPException(
+                status_code=403,
+                detail="Router agent only available via /api/workflows/{workflow_id}/chat. Use workflow endpoints for multi-agent orchestration."
+            )
+        
         # Get or create thread
         thread_repo = get_thread_repository()
         
