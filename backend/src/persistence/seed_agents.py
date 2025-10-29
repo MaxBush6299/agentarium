@@ -2,13 +2,14 @@
 Agent Seeding
 Seeds default agents into Cosmos DB on application startup.
 
-Default Agents:
-1. Router Agent - Active, multi-agent orchestrator using A2A to call specialists
-2. Support Triage Agent - Active, with MCP + OpenAPI tools
-3. Azure Ops Agent - Active, with MCP + OpenAPI tools
-4. SQL Agent - Active, with custom MCP tool for Adventure Works
-5. Data Analytics Agent - Active, analyzes enterprise data and generates reports
-6. Business Impact Agent - Inactive, placeholder for future development
+Streamlined Agent Architecture:
+1. Router Agent - Active, intelligent multi-agent orchestrator
+2. Data Agent - Active, unified database query specialist
+3. Analyst Agent - Active, business intelligence and insights
+4. Order Agent - Active, order placement and fulfillment
+5. Microsoft Docs Agent - Active, documentation search
+
+All agents are focused, specialized, and work together via handoff pattern.
 """
 import logging
 from typing import List
@@ -57,13 +58,13 @@ def get_default_agents() -> List[AgentMetadata]:
         List of AgentMetadata objects representing default agents
     """
     return [
-        # 1. Router Agent (ACTIVE) - Multi-agent orchestrator using Handoff Pattern
+        # 1. Router Agent (ACTIVE) - Multi-agent orchestrator
         AgentMetadata(
             id="router",
             name="Router Agent",
-            description="Intelligent multi-agent orchestrator using handoff pattern. Routes queries to specialists via intent classification.",
+            description="Intelligent multi-agent orchestrator. Routes complex queries to specialists via intent classification and handoff pattern.",
             system_prompt=load_prompt("router_prompt.txt"),
-            model="gpt-4.1",
+            model="gpt-4o",
             temperature=0.7,
             max_tokens=4000,
             max_messages=25,
@@ -71,21 +72,100 @@ def get_default_agents() -> List[AgentMetadata]:
             capabilities=[
                 "intent_classification",
                 "handoff_orchestration",
-                "clarification",
-                "guidance"
+                "multi_agent_coordination",
+                "query_routing"
             ],
             status=AgentStatus.ACTIVE,
             is_public=True,
             version="2.0.0"
         ),
         
-        # 2. Microsoft Docs Agent (ACTIVE)
+        # 2. Data Agent (ACTIVE) - Unified database query specialist
+        AgentMetadata(
+            id="data-agent",
+            name="Data Agent",
+            description="Single source of truth for all Wide World Importers database queries. Handles sales, inventory, purchasing, finance, and customer data.",
+            system_prompt=load_prompt("data_agent_prompt.txt"),
+            model="gpt-4o",
+            temperature=0.6,
+            max_tokens=4000,
+            max_messages=20,
+            tools=[
+                ToolConfig(
+                    type=ToolType.MCP,
+                    name="mssql-mcp",
+                    mcp_server_name="mssql-mcp",
+                    config={"description": "SQL database access for Wide World Importers"},
+                    enabled=True
+                )
+            ],
+            capabilities=[
+                "sales_analysis",
+                "inventory_management",
+                "purchasing_analytics",
+                "financial_reporting",
+                "customer_insights",
+                "cross_domain_queries"
+            ],
+            status=AgentStatus.ACTIVE,
+            is_public=True,
+            version="1.0.0"
+        ),
+        
+        # 3. Analyst Agent (ACTIVE) - Business intelligence and insights
+        AgentMetadata(
+            id="analyst",
+            name="Analyst Agent",
+            description="Transforms data into business insights. Analyzes trends, provides recommendations, and generates strategic guidance based on data from the Data Agent.",
+            system_prompt=load_prompt("analyst_agent_prompt.txt"),
+            model="gpt-4o",
+            temperature=0.7,
+            max_tokens=4000,
+            max_messages=20,
+            tools=[],
+            capabilities=[
+                "trend_analysis",
+                "performance_analysis",
+                "comparative_analysis",
+                "opportunity_identification",
+                "financial_insights",
+                "forecasting",
+                "recommendations"
+            ],
+            status=AgentStatus.ACTIVE,
+            is_public=True,
+            version="1.0.0"
+        ),
+        
+        # 4. Order Agent (ACTIVE) - Order placement and fulfillment
+        AgentMetadata(
+            id="order-agent",
+            name="Order Agent",
+            description="Wide World Importers order specialist. Handles order placement, order confirmation, and order validation. Works with data provided by the Data Agent.",
+            system_prompt=load_prompt("order_agent_prompt.txt"),
+            model="gpt-4o",
+            temperature=0.6,
+            max_tokens=3000,
+            max_messages=15,
+            tools=[],
+            capabilities=[
+                "order_placement",
+                "order_confirmation",
+                "order_modification",
+                "order_validation"
+            ],
+            status=AgentStatus.ACTIVE,
+            is_public=True,
+            version="1.0.0"
+        ),
+        
+        # 5. Microsoft Docs Agent (ACTIVE) - Documentation search
         AgentMetadata(
             id="microsoft-docs",
             name="Microsoft Docs Agent",
             description="Searches Microsoft Learn documentation and provides technical guidance. Helps find relevant articles, code samples, and best practices.",
             system_prompt=load_prompt("microsoft_docs_agent_prompt.txt"),
-            model="gpt-4.1",
+            model="gpt-4o",
             temperature=0.7,
             max_tokens=4000,
             max_messages=20,
@@ -102,162 +182,8 @@ def get_default_agents() -> List[AgentMetadata]:
                 "documentation_search",
                 "technical_guidance",
                 "code_samples",
-                "api_reference"
-            ],
-            status=AgentStatus.ACTIVE,
-            is_public=True,
-            version="1.0.0"
-        ),
-        
-        # 3. Sales Agent (ACTIVE - Wide World Importers)
-        AgentMetadata(
-            id="sales-agent",
-            name="Sales Agent",
-            description="Wide World Importers sales specialist. Analyzes customer relationships, sales performance, orders, invoices, and revenue opportunities.",
-            system_prompt=load_prompt("sales_agent_prompt.txt"),
-            model="gpt-4.1",
-            temperature=0.5,
-            max_tokens=4000,
-            max_messages=20,
-            tools=[
-                ToolConfig(
-                    type=ToolType.MCP,
-                    name="mssql-mcp",
-                    mcp_server_name="mssql-mcp",
-                    config={"description": "SQL database access for Wide World Importers"},
-                    enabled=True
-                )
-            ],
-            capabilities=[
-                "sales_analysis",
-                "customer_management",
-                "order_tracking",
-                "revenue_analysis",
-                "customer_insights"
-            ],
-            status=AgentStatus.ACTIVE,
-            is_public=True,
-            version="1.0.0"
-        ),
-        
-        # 4. Warehouse Agent (ACTIVE - Wide World Importers)
-        AgentMetadata(
-            id="warehouse-agent",
-            name="Warehouse Agent",
-            description="Wide World Importers warehouse specialist. Manages inventory levels, stock movements, reorder points, and warehouse operations.",
-            system_prompt=load_prompt("warehouse_agent_prompt.txt"),
-            model="gpt-4.1",
-            temperature=0.5,
-            max_tokens=4000,
-            max_messages=20,
-            tools=[
-                ToolConfig(
-                    type=ToolType.MCP,
-                    name="mssql-mcp",
-                    mcp_server_name="mssql-mcp",
-                    config={"description": "SQL database access for Wide World Importers"},
-                    enabled=True
-                )
-            ],
-            capabilities=[
-                "inventory_management",
-                "stock_tracking",
-                "reorder_alerts",
-                "warehouse_optimization",
-                "stock_analysis"
-            ],
-            status=AgentStatus.ACTIVE,
-            is_public=True,
-            version="1.0.0"
-        ),
-        
-        # 5. Purchasing Agent (ACTIVE - Wide World Importers)
-        AgentMetadata(
-            id="purchasing-agent",
-            name="Purchasing Agent",
-            description="Wide World Importers purchasing specialist. Manages suppliers, purchase orders, procurement efficiency, and vendor relationships.",
-            system_prompt=load_prompt("purchasing_agent_prompt.txt"),
-            model="gpt-4.1",
-            temperature=0.5,
-            max_tokens=4000,
-            max_messages=20,
-            tools=[
-                ToolConfig(
-                    type=ToolType.MCP,
-                    name="mssql-mcp",
-                    mcp_server_name="mssql-mcp",
-                    config={"description": "SQL database access for Wide World Importers"},
-                    enabled=True
-                )
-            ],
-            capabilities=[
-                "supplier_management",
-                "purchase_order_tracking",
-                "procurement_analysis",
-                "vendor_performance",
-                "cost_optimization"
-            ],
-            status=AgentStatus.ACTIVE,
-            is_public=True,
-            version="1.0.0"
-        ),
-        
-        # 6. Customer Service Agent (ACTIVE - Wide World Importers)
-        AgentMetadata(
-            id="customer-service-agent",
-            name="Customer Service Agent",
-            description="Wide World Importers customer service specialist. First point of contact for customer inquiries, order tracking, and issue resolution.",
-            system_prompt=load_prompt("customer_service_agent_prompt.txt"),
-            model="gpt-4.1",
-            temperature=0.6,
-            max_tokens=4000,
-            max_messages=20,
-            tools=[
-                ToolConfig(
-                    type=ToolType.MCP,
-                    name="mssql-mcp",
-                    mcp_server_name="mssql-mcp",
-                    config={"description": "SQL database access for Wide World Importers"},
-                    enabled=True
-                )
-            ],
-            capabilities=[
-                "customer_support",
-                "order_tracking",
-                "issue_resolution",
-                "cross_functional_queries",
-                "customer_communication"
-            ],
-            status=AgentStatus.ACTIVE,
-            is_public=True,
-            version="1.0.0"
-        ),
-        
-        # 7. Finance Agent (ACTIVE - Wide World Importers)
-        AgentMetadata(
-            id="finance-agent",
-            name="Finance Agent",
-            description="Wide World Importers finance specialist. Manages accounts receivable/payable, financial transactions, credit management, and financial reporting.",
-            system_prompt=load_prompt("finance_agent_prompt.txt"),
-            model="gpt-4.1",
-            temperature=0.5,
-            max_tokens=4000,
-            max_messages=20,
-            tools=[
-                ToolConfig(
-                    type=ToolType.MCP,
-                    name="mssql-mcp",
-                    mcp_server_name="mssql-mcp",
-                    config={"description": "SQL database access for Wide World Importers"},
-                    enabled=True
-                )
-            ],
-            capabilities=[
-                "financial_analysis",
-                "accounts_receivable",
-                "accounts_payable",
-                "credit_management",
-                "payment_tracking"
+                "api_reference",
+                "best_practices"
             ],
             status=AgentStatus.ACTIVE,
             is_public=True,

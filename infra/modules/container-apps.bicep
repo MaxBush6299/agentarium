@@ -39,6 +39,22 @@ param azureOpenAIApiKey string = ''
 @description('Azure OpenAI API version')
 param azureOpenAIApiVersion string = '2025-01-01-preview'
 
+@description('MSSQL MCP server URL')
+param mssqlMcpUrl string = ''
+
+@description('MSSQL OAuth token URL')
+param mssqlOAuthTokenUrl string = ''
+
+@description('MSSQL OAuth client ID')
+param mssqlClientId string = ''
+
+@description('MSSQL OAuth client secret (secure)')
+@secure()
+param mssqlClientSecret string = ''
+
+@description('MSSQL OAuth scope')
+param mssqlScope string = ''
+
 // Container Apps Environment
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-11-02-preview' = {
   name: 'cae-${environmentName}'
@@ -161,6 +177,10 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
           name: 'azure-openai-api-key'
           value: azureOpenAIApiKey
         }
+        {
+          name: 'mssql-client-secret'
+          value: mssqlClientSecret
+        }
       ]
       ingress: {
         external: false
@@ -210,6 +230,26 @@ resource backendContainerApp 'Microsoft.App/containerApps@2023-11-02-preview' = 
             {
               name: 'AZURE_OPENAI_API_VERSION'
               value: azureOpenAIApiVersion
+            }
+            {
+              name: 'MSSQL_MCP_URL'
+              value: mssqlMcpUrl
+            }
+            {
+              name: 'MSSQL_OAUTH_TOKEN_URL'
+              value: mssqlOAuthTokenUrl
+            }
+            {
+              name: 'MSSQL_CLIENT_ID'
+              value: mssqlClientId
+            }
+            {
+              name: 'MSSQL_CLIENT_SECRET'
+              secretRef: 'mssql-client-secret'
+            }
+            {
+              name: 'MSSQL_SCOPE'
+              value: mssqlScope
             }
           ]
         }

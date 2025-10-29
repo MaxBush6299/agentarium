@@ -68,52 +68,37 @@ class HandoffRouter:
     
     # Specialist agent metadata
     SPECIALIST_DOMAINS = {
-        "sales-agent": {
-            "name": "Sales Agent",
+        "data-agent": {
+            "name": "Data Agent",
             "keywords": [
-                "customer", "order", "sales", "revenue", "invoice", "account",
-                "salesperson", "buying", "payment", "client", "purchase history",
-                "customer relationship", "sales performance", "order history",
-                "billing", "transaction", "customer lifetime value"
+                "inventory", "stock", "customer", "order", "sales", "supplier", "payment", 
+                "data", "show", "list", "get", "query", "search", "retrieve", "find",
+                "information", "details", "records", "table", "database", "statistics",
+                "count", "total", "sum", "average", "report"
             ]
         },
-        "warehouse-agent": {
-            "name": "Warehouse Agent",
+        "analyst": {
+            "name": "Analyst Agent",
             "keywords": [
-                "inventory", "stock", "warehouse", "reorder", "supply", "bin",
-                "units", "available", "quantity", "stock level", "stock movement",
-                "holding", "stocktake", "item location", "picking", "fulfillment"
+                "analyze", "analysis", "trend", "insight", "recommend", "recommendation", 
+                "forecast", "performance", "best", "worst", "top", "bottom", "pattern",
+                "opportunity", "risk", "summary", "overview", "why", "how", "impact",
+                "strategy", "plan", "improve", "optimize"
             ]
         },
-        "purchasing-agent": {
-            "name": "Purchasing Agent",
+        "order-agent": {
+            "name": "Order Agent",
             "keywords": [
-                "supplier", "purchase order", "procurement", "vendor", "lead time",
-                "delivery", "buying", "sourcing", "purchase", "po", "vendor management",
-                "supplier performance", "cost", "pricing", "quote"
-            ]
-        },
-        "customer-service-agent": {
-            "name": "Customer Service Agent",
-            "keywords": [
-                "track", "where is", "status", "help", "support", "issue",
-                "problem", "inquiry", "customer service", "complaint", "question",
-                "assistance", "find", "locate", "check on"
-            ]
-        },
-        "finance-agent": {
-            "name": "Finance Agent",
-            "keywords": [
-                "payment", "invoice due", "credit", "balance", "overdue", "financial",
-                "transaction", "owed", "pay", "outstanding", "accounts receivable",
-                "accounts payable", "ar", "ap", "credit limit", "aging"
+                "order", "place", "purchase", "buy", "checkout", "confirm", "ship", 
+                "delivery", "submit", "create", "new order", "book", "reserve",
+                "fulfillment", "process order", "place an order"
             ]
         },
         "microsoft-docs": {
             "name": "Microsoft Docs Agent",
             "keywords": [
                 "microsoft", "documentation", "docs", "how to", "tutorial", "api",
-                "reference", "learn", "guide", "manual", "instructions", "example"
+                "reference", "learn", "guide", "manual", "instructions", "example", "azure"
             ]
         }
     }
@@ -265,10 +250,20 @@ AVAILABLE SPECIALISTS:
 TASK:
 Determine if the user's query has been FULLY addressed, or if there are gaps/unanswered parts that require another specialist.
 
-Consider:
-1. Does the response answer ALL parts of the user's question?
-2. Are there related questions implied by the user that weren't addressed?
-3. Would additional specialist input provide value?
+ANALYSIS RULES:
+1. If the specialist provided DATA only but the user asked for ANALYSIS, trends, patterns, recommendations, or insights → needs analyst
+2. If the specialist provided DATA but user asked to PLACE AN ORDER or take ACTION → needs order-agent
+3. If the specialist provided raw data/tables but didn't explain what they mean → likely needs analyst
+4. If the user explicitly asked "why", "what does this mean", "analyze", "trends", "recommendations", "should we", "what if" → needs analyst
+5. If the specialist is data-agent and user's query contained analysis-related keywords → needs analyst for follow-up
+6. If response is just data retrieval without answering the INTENT behind the question → gap exists
+
+COMMON PATTERNS THAT INDICATE GAPS:
+- Data agent returns tables → analyst should provide insights/patterns
+- User asked "what's the trend" but only got data → gap
+- User asked "are we doing well" but only got numbers → gap
+- Data tables with no interpretation → gap
+- User asked for a recommendation but only got data → gap
 
 RESPONSE FORMAT:
 If query is FULLY addressed:
@@ -447,12 +442,23 @@ Provide ONLY the synthesized response, no meta-commentary."""
             agent_responses: List[Dict[str, str]] = []  # Track all specialist responses
             agents_consulted: List[str] = []  # Track which agents we've already consulted
             
+            # Track if we've pre-selected a specialist via handoff
+            preselected_agent_id: Optional[str] = None
+            
             for turn in range(max_handoffs + 1):
-                # Classify intent and get specialist
-                target_agent_id, specialist_agent, context_prefix = await self.route_to_specialist(
-                    current_message,
-                    use_lazy_classification=False
-                )
+                # If we have a pre-selected agent (from handoff), use it directly
+                # Otherwise, classify intent and get specialist
+                if preselected_agent_id:
+                    logger.info(f"[HANDOFF-TURN-{turn}] Using pre-selected agent: {preselected_agent_id}")
+                    specialist_agent = await self._get_specialist_agent(preselected_agent_id)
+                    target_agent_id = preselected_agent_id
+                    context_prefix = ""
+                    preselected_agent_id = None  # Clear for next iteration
+                else:
+                    target_agent_id, specialist_agent, context_prefix = await self.route_to_specialist(
+                        current_message,
+                        use_lazy_classification=False
+                    )
                 
                 if not specialist_agent:
                     logger.error(f"Could not load specialist agent, aborting handoff routing")
@@ -542,18 +548,12 @@ Provide ONLY the synthesized response, no meta-commentary."""
                             print(f"🔍 [HANDOFF-TURN-{turn}] Gap detected, routing to {next_specialist}")
                             
                             # Override next routing to the suggested specialist
-                            # We'll use the orchestrator's manual routing
                             current_message = user_message
                             handoff_count += 1
+                            agents_consulted.append(target_agent_id)
                             
-                            # Load the suggested specialist directly
-                            target_agent_id, specialist_agent, context_prefix = target_agent_id, await self._get_specialist_agent(next_specialist), ""
-                            if not specialist_agent:
-                                logger.error(f"Could not load suggested specialist: {next_specialist}")
-                                break
-                            
-                            target_agent_id = next_specialist
-                            specialist_used = next_specialist
+                            # Pre-select the specialist for next iteration (skip route_to_specialist)
+                            preselected_agent_id = next_specialist
                             continue
                     
                     # No handoff needed - finalize response

@@ -14,6 +14,10 @@ Architecture:
 3. Specialist detects "outside my area" requests and signals handoff
 4. Router re-classifies and transfers to new specialist with context
 5. Cycle repeats as needed
+
+DEPRECATED: This module has been archived and replaced by the official
+HandoffBuilder pattern in handoff_builder_orchestrator.py. This code is
+kept for reference only.
 """
 
 import json
@@ -100,6 +104,8 @@ Rules:
 class HandoffOrchestrator:
     """
     Orchestrates multi-agent handoff routing with intent classification.
+    
+    DEPRECATED: Use handoff_builder_orchestrator.py instead.
     
     Manages:
     - Intent classification for routing queries to correct agent

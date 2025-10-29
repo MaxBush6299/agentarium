@@ -116,6 +116,26 @@ param azureOpenaiEndpoint string = ''
 @description('Azure OpenAI API key')
 param azureOpenaiApiKey string = ''
 
+@secure()
+@description('MSSQL MCP URL')
+param mssqlMcpUrl string = ''
+
+@secure()
+@description('MSSQL OAuth token URL')
+param mssqlOAuthTokenUrl string = ''
+
+@secure()
+@description('MSSQL OAuth client ID')
+param mssqlClientId string = ''
+
+@secure()
+@description('MSSQL OAuth client secret')
+param mssqlClientSecret string = ''
+
+@secure()
+@description('MSSQL OAuth scope')
+param mssqlScope string = ''
+
 // ============================================================================
 // DEPLOY NETWORK MODULE
 // ============================================================================
@@ -241,6 +261,11 @@ module containerAppsModule './modules/container-apps.bicep' = {
     azureOpenAIEndpoint: azureOpenaiEndpoint
     azureOpenAIApiKey: azureOpenaiApiKey
     azureOpenAIApiVersion: '2025-03-01-preview'
+    mssqlMcpUrl: mssqlMcpUrl
+    mssqlOAuthTokenUrl: mssqlOAuthTokenUrl
+    mssqlClientId: mssqlClientId
+    mssqlClientSecret: mssqlClientSecret
+    mssqlScope: mssqlScope
   }
 }
 

@@ -83,6 +83,31 @@ const useStyles = makeStyles({
     '& li': {
       marginBottom: tokens.spacingVerticalXS,
     },
+    '& table': {
+      borderCollapse: 'collapse',
+      width: '100%',
+      marginTop: tokens.spacingVerticalS,
+      marginBottom: tokens.spacingVerticalS,
+      border: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    '& th': {
+      backgroundColor: tokens.colorNeutralBackground3,
+      color: tokens.colorNeutralForeground1,
+      fontWeight: tokens.fontWeightSemibold,
+      ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+      textAlign: 'left',
+      border: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    '& td': {
+      ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+      border: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    '& tr:nth-child(even)': {
+      backgroundColor: tokens.colorNeutralBackground2,
+    },
+    '& tr:hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
   },
   errorContent: {
     color: tokens.colorPaletteRedForeground1,

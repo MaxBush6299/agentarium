@@ -84,3 +84,23 @@ param azureOpenaiEndpoint = ''
 @secure()
 @description('Azure OpenAI API key')
 param azureOpenaiApiKey = ''
+
+@secure()
+@description('MSSQL MCP URL')
+param mssqlMcpUrl = 'https://mssqlmcp.azure-api.net/mcp'
+
+@secure()
+@description('MSSQL OAuth token URL')
+param mssqlOAuthTokenUrl = 'https://login.microsoftonline.com/2e9b0657-eef8-47af-8747-5e89476faaab/oauth2/v2.0/token'
+
+@secure()
+@description('MSSQL OAuth client ID')
+param mssqlClientId = '17a97781-0078-4478-8b4e-fe5dda9e2400'
+
+@secure()
+@description('MSSQL OAuth client secret')
+param mssqlClientSecret = 'Kyb8Q~FL6eva5m6pbe.23y9g8ttWZ1UMFSHUZcJn'
+
+@secure()
+@description('MSSQL OAuth scope')
+param mssqlScope = 'api://17a97781-0078-4478-8b4e-fe5dda9e2400/.default'

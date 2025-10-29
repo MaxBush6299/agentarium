@@ -101,7 +101,8 @@ export const ChatPage = () => {
   const locationState = location.state as LocationState
   
   // Agent and conversation state
-  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || 'azure-ops')
+  // Default to Router agent - the intelligent multi-agent orchestrator
+  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || 'router')
   const [conversationName, setConversationName] = useState<string>('')
   
   // Chat state

@@ -1,6 +1,11 @@
 """
 Chat API Router
-RESTful API endpoints for agent conversations with SSE streaming.
+
+RESTful API endpoints for:
+1. Individual agent conversations (direct chat)
+2. Multi-agent workflow orchestration (HandoffBuilder) - coming soon
+
+Both support SSE streaming for real-time responses.
 """
 
 import asyncio
@@ -21,7 +26,6 @@ from src.persistence.agents import get_agent_repository
 from src.api.streaming import EventGenerator
 from src.agents.factory import AgentFactory
 from src.agents.base import DemoBaseAgent
-from src.agents.handoff_router import HandoffRouter
 
 logger = logging.getLogger(__name__)
 
@@ -175,25 +179,14 @@ async def chat_with_agent(
         
         # Start streaming response
         if request.stream:
-            if thread.agent_id == "router":
-                return StreamingResponse(
-                    stream_handoff_response(thread, run, request.message),
-                    media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "X-Accel-Buffering": "no",  # Disable nginx buffering
-                        "Connection": "keep-alive",
-                    }
-                )
-            else:
-                return StreamingResponse(
-                    stream_chat_response(agent, thread, run, request.message),
-                    media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "X-Accel-Buffering": "no",  # Disable nginx buffering
-                        "Connection": "keep-alive",
-                    }
+            return StreamingResponse(
+                stream_chat_response(agent, thread, run, request.message),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                    "Connection": "keep-alive",
+                }
                 )
         else:
             # Non-streaming response (synchronous)
@@ -205,239 +198,6 @@ async def chat_with_agent(
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-async def stream_handoff_response(thread: Thread, run, user_message: str):
-    """
-    Stream chat response using HandoffRouter for multi-agent orchestration.
-    
-    This function handles the Router Agent case by:
-    1. Using HandoffOrchestrator to classify intent
-    2. Loading appropriate specialist agent
-    3. Routing query to specialist
-    4. Detecting handoffs and re-routing if needed
-    
-    Args:
-        thread: Thread object from Cosmos DB
-        run: Run object from Cosmos DB
-        user_message: User message content
-        
-    Yields:
-        SSE-formatted event strings
-    """
-    print("\n========== HANDOFF STREAM START ==========")
-    print(f"[stream_handoff_response] Entered function for run {run.id}")
-    
-    event_gen = EventGenerator(heartbeat_interval=15.0)
-    run_repo = get_run_repository()
-    thread_repo = get_thread_repository()
-    
-    try:
-        print("[1] Updating run status to IN_PROGRESS")
-        await run_repo.update_status(run.id, thread.id, RunStatus.IN_PROGRESS, run=run)
-        
-        # Initialize HandoffRouter
-        agent_repo = get_agent_repository()
-        handoff_router = HandoffRouter(agent_repo, session_id=thread.id)
-        
-        # Get a placeholder agent thread - will be replaced by specialist's thread
-        # The first specialist agent will create its own thread
-        print("[1.5] Creating placeholder agent thread")
-        from agent_framework import AgentThread
-        agent_thread = AgentThread()
-
-
-        
-        # Use handoff router to route and chat
-        print("[2] Starting handoff routing...")
-        try:
-            response_text, specialist_used, tool_calls = await handoff_router.route_and_chat(
-                None, user_message, agent_thread, max_handoffs=3,
-                run_id=run.id, thread_id=thread.id
-            )
-            
-            logger.info(f"[HANDOFF] Final response from {specialist_used}")
-            print(f"[HANDOFF] Response from {specialist_used}: {response_text[:100]}...")
-            
-            # Query step history from the run to get actual tool calls
-            step_repo = get_step_repository()
-            try:
-                print(f"[HANDOFF] Querying steps for run_id={run.id}")
-                steps = await step_repo.list_by_run(run.id, limit=100)
-                print(f"[HANDOFF] Found {len(steps)} steps in run history")
-                for i, step in enumerate(steps):
-                    print(f"[HANDOFF] Step {i}: type={getattr(step, 'step_type', 'unknown')}, status={getattr(step, 'status', 'unknown')}")
-                
-                # Extract tool calls from steps
-                tool_calls_from_steps = []
-                for step in steps:
-                    if hasattr(step, 'step_type') and step.step_type == StepType.TOOL_CALL:
-                        tool_info = {
-                            'name': getattr(step.tool_call, 'tool_name', 'unknown') if step.tool_call else 'unknown',
-                            'id': getattr(step, 'id', None),
-                            'status': getattr(step, 'status', 'unknown')
-                        }
-                        if hasattr(step, 'tool_call') and step.tool_call:
-                            tool_info['input'] = getattr(step.tool_call, 'input', {})
-                            tool_info['output'] = getattr(step.tool_call, 'output', '')
-                        tool_calls_from_steps.append(tool_info)
-                        print(f"[HANDOFF] Step tool: {tool_info['name']}")
-                
-                tool_calls = tool_calls_from_steps if tool_calls_from_steps else tool_calls
-                print(f"[HANDOFF] Total tool calls from steps: {len(tool_calls)}")
-            except Exception as step_error:
-                print(f"[HANDOFF] Error querying steps: {type(step_error).__name__}: {step_error}")
-                logger.warning(f"Could not query step history: {step_error}")
-                # Fall back to extracted tool calls
-                pass
-            
-            # Send trace event for routing step
-            specialist_name = specialist_used or "unknown"
-            await event_gen.send_trace_start(
-                step_id="routing_step",
-                tool_name=specialist_name,
-                tool_type="agent_routing",
-                input_data={"user_message": user_message, "intent": specialist_name}
-            )
-            
-            # Send trace events for each tool call
-            for i, tool_call in enumerate(tool_calls):
-                tool_name = tool_call.get('name', 'unknown_tool')
-                tool_id = f"tool_call_{i+1}"
-                
-                # DEBUG: Show full tool_call structure
-                print(f"[HANDOFF-TRACE] Tool call #{i+1} structure: {tool_call.keys()}")
-                print(f"[HANDOFF-TRACE] Tool call full dict: {tool_call}")
-                
-                # Get input and output
-                tool_input = tool_call.get('input', tool_call.get('arguments', {}))
-                tool_output = tool_call.get('output', tool_call.get('result', ''))
-                
-                print(f"[HANDOFF-TRACE] Sending trace for tool call: {tool_name}")
-                print(f"[HANDOFF-TRACE]   Input: {tool_input}")
-                print(f"[HANDOFF-TRACE]   Output length: {len(str(tool_output))}")
-                print(f"[HANDOFF-TRACE]   Output value (first 100 chars): {str(tool_output)[:100]}")
-                
-                await event_gen.send_trace_start(
-                    step_id=tool_id,
-                    tool_name=tool_name,
-                    tool_type="agent_tool",
-                    input_data=tool_input if isinstance(tool_input, dict) else {'args': str(tool_input)}
-                )
-                
-                if tool_output:
-                    output_str = tool_output[:1000] if isinstance(tool_output, str) else str(tool_output)[:1000]
-                    print(f"[HANDOFF-TRACE]   Sending trace_end with result: {output_str[:100]}")
-                    await event_gen.send_trace_end(
-                        step_id=tool_id,
-                        status="completed",
-                        output={"output": output_str}
-                    )
-                else:
-                    print(f"[HANDOFF-TRACE]   No output to send, tool_output is falsy")
-            
-            assistant_response = response_text
-            
-            # Send trace end for routing
-            await event_gen.send_trace_end(
-                step_id="routing_step",
-                status="completed",
-                output={"specialist": specialist_name, "response_length": len(response_text), "tool_calls_count": len(tool_calls)}
-            )
-            
-        except Exception as e:
-            logger.error(f"[HANDOFF] Error in routing: {type(e).__name__}: {e}", exc_info=True)
-            assistant_response = f"Error: {str(e)}"
-            await event_gen.send_token(assistant_response)
-            raise
-        
-        # Send response to client
-        print("[2.5] Sending response token to client")
-        await event_gen.send_token(assistant_response)
-        
-        # Create assistant message ID
-        assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
-        
-        # Add assistant message to thread
-        print("[3] Adding assistant message to thread")
-        assistant_message = Message(
-            id=assistant_message_id,
-            role="assistant",
-            content=assistant_response,
-            timestamp=datetime.utcnow()
-        )
-        print(f"[3.1] Created assistant message: {assistant_message_id}")
-        try:
-            print(f"[3.1.5] About to call thread_repo.add_message with timeout...")
-            await asyncio.wait_for(
-                thread_repo.add_message(thread.id, thread.agent_id, assistant_message, thread=thread),
-                timeout=10.0
-            )
-            print(f"[3.2] Message added successfully")
-        except asyncio.TimeoutError:
-            print(f"[3.2-TIMEOUT] thread_repo.add_message timed out after 10 seconds")
-            logger.error("Thread repository add_message timed out")
-            raise
-        except Exception as add_msg_error:
-            print(f"[3.2-ERROR] Error adding message: {type(add_msg_error).__name__}: {add_msg_error}")
-            logger.error(f"Error adding assistant message to thread: {add_msg_error}", exc_info=True)
-            raise
-        
-        # Update run
-        print("[4] Updating run metadata")
-        try:
-            print(f"[4.0] About to call run_repo.set_assistant_message...")
-            await asyncio.wait_for(
-                run_repo.set_assistant_message(run.id, thread.id, assistant_message_id, run=run),
-                timeout=5.0
-            )
-            print("[4.1] Assistant message ID set on run")
-        except asyncio.TimeoutError:
-            print(f"[4.1-TIMEOUT] set_assistant_message timed out")
-            logger.error("Run repository set_assistant_message timed out")
-            raise
-        tokens_used = len(user_message.split()) * 2 + len(assistant_response.split()) * 2
-        await run_repo.update_tokens(run.id, thread.id, tokens_used // 2, tokens_used // 2, cost_usd=0, run=run)
-        await run_repo.update_status(run.id, thread.id, RunStatus.COMPLETED, run=run)
-        
-        # Send done event
-        await event_gen.send_done(
-            run_id=run.id,
-            thread_id=thread.id,
-            message_id=assistant_message_id,
-            tokens_used=tokens_used
-        )
-        
-    except Exception as e:
-        logging.error(f"Error in handoff response: {type(e).__name__}: {str(e)}")
-        
-        # Try to update run status to failed
-        try:
-            await run_repo.update_status(run.id, thread.id, RunStatus.FAILED, error=str(e), run=run)
-        except Exception as update_error:
-            logging.error(f"Could not update run status: {update_error}")
-        
-        # Queue error event
-        await event_gen.send_error(error=str(e), details="Error in multi-agent routing")
-    
-    finally:
-        try:
-            # Stream all queued events
-            async for event_str in event_gen.stream():
-                try:
-                    yield event_str
-                except Exception as yield_error:
-                    logging.error(f"Error yielding event: {yield_error}")
-                    break
-        except Exception as stream_loop_error:
-            logging.error(f"Error in event stream loop: {stream_loop_error}")
-        finally:
-            try:
-                await event_gen.close()
-            except Exception as close_error:
-                print(f"Error closing event generator: {close_error}")
-        
-        print("========== HANDOFF STREAM END ==========\n")
 
 
 async def stream_chat_response(agent, thread: Thread, run, user_message: str):

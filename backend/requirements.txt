@@ -15,7 +15,8 @@ openai
 
 # Agent Framework - Microsoft's AI Agent Framework (Public Preview - Beta)
 # Includes: core, azure-ai, a2a, devui, mem0, redis, copilot-studio, purview
-agent-framework
+# Updated to include HandoffBuilder for multi-agent orchestration
+agent-framework>=0.45.0
 
 # HTTP & Async
 httpx
