@@ -34,13 +34,20 @@ class ThreadRepository:
         
         self.container = self.cosmos.get_container(CONTAINER_NAME)
     
-    async def create(self, agent_id: str, user_id: Optional[str] = None, metadata: Optional[dict] = None) -> Thread:
+    async def create(
+        self,
+        agent_id: str,
+        user_id: Optional[str] = None,
+        workflow_id: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ) -> Thread:
         """
         Create a new conversation thread.
         
         Args:
             agent_id: ID of the agent for this thread
             user_id: Optional user ID
+            workflow_id: Optional workflow ID if thread is part of a multi-agent workflow
             metadata: Optional metadata dictionary
             
         Returns:
@@ -51,6 +58,7 @@ class ThreadRepository:
         thread = Thread(
             id=thread_id,
             agent_id=agent_id,
+            workflow_id=workflow_id,
             user_id=user_id,
             messages=[],
             runs=[],
