@@ -26,6 +26,7 @@ import {
 } from '@fluentui/react-components'
 import { Agent } from '@/types/agent'
 import { getAgents } from '@/services/agentsService'
+import { apiGet } from '@/services/api'
 
 const useStyles = makeStyles({
   root: {
@@ -122,11 +123,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
 
         // Set initial workflow if needed
         try {
-          const workflowResponse = await fetch('/api/workflows')
-          if (workflowResponse.ok) {
-            const workflowData = await workflowResponse.json()
-            const workflowList: Workflow[] = Object.values(workflowData)
-            setWorkflows(workflowList)
+          console.log('[AgentSelector] Fetching workflows from /api/workflows')
+          const workflowData = await apiGet<Record<string, Workflow>>('/workflows')
+          console.log('[AgentSelector] Workflows fetched:', workflowData)
+          const workflowList: Workflow[] = Object.values(workflowData || {})
+          console.log('[AgentSelector] Workflow list:', workflowList)
+          setWorkflows(workflowList)
 
             if (selectedWorkflowId && workflowList.length > 0) {
               const workflow = workflowList.find((w) => w.id === selectedWorkflowId)
@@ -135,9 +137,8 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                 setSelectedValue(`workflow:${workflow.id}`)
               }
             }
-          }
         } catch (err) {
-          console.warn('Could not fetch workflows:', err)
+          console.warn('[AgentSelector] Could not fetch workflows:', err)
           // Workflows are optional, continue anyway
         }
       } catch (err) {
