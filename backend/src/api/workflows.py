@@ -50,20 +50,26 @@ async def list_workflows():
         }
     """
     try:
+        logger.info("[WORKFLOWS] Starting list_workflows()")
         from src.agents.workflows import get_available_workflows
         
+        logger.info("[WORKFLOWS] get_available_workflows imported successfully")
         workflows = get_available_workflows()
-        logger.info(f"Returning {len(workflows)} available workflows")
+        logger.info(f"[WORKFLOWS] Returning {len(workflows)} available workflows")
+        
+        if workflows:
+            logger.info(f"[WORKFLOWS] Workflow IDs: {list(workflows.keys())}")
         
         return workflows
         
     except ImportError as e:
-        logger.error(f"Failed to import workflows module: {str(e)}")
+        logger.error(f"[WORKFLOWS] Failed to import workflows module: {str(e)}", exc_info=True)
         # Graceful degradation - return empty dict if workflows module unavailable
         return {}
     except Exception as e:
-        logger.error(f"Error listing workflows: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[WORKFLOWS] Error listing workflows: {str(e)}", exc_info=True)
+        # Return empty dict instead of error to prevent frontend breaking
+        return {}
 
 
 @router.post("/{workflow_id}/chat", name="execute_workflow")
