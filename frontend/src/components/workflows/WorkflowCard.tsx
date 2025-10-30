@@ -11,11 +11,9 @@ import {
   Badge,
   makeStyles,
   tokens,
-  Tooltip,
 } from '@fluentui/react-components';
 import {
   Play24Regular,
-  Settings24Regular,
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -69,24 +67,19 @@ interface WorkflowCardProps {
     status: string;
     associatedAgents: string[];
   };
-  onWorkflowDeleted?: (workflowId: string) => void;
 }
 
 /**
  * WorkflowCard Component
  */
-export const WorkflowCard = ({ workflow, onWorkflowDeleted }: WorkflowCardProps) => {
+export const WorkflowCard = ({ workflow }: WorkflowCardProps) => {
   const styles = useStyles();
   const navigate = useNavigate();
 
-  const handleViewDetails = (e: React.MouseEvent) => {
+  const handleStartChat = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigate(`/workflows/${workflow.id}`);
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigate(`/workflows/${workflow.id}/edit`);
+    // Navigate to chat page with workflow ID as query parameter
+    navigate(`/chat?workflow=${workflow.id}`);
   };
 
   return (
@@ -112,25 +105,10 @@ export const WorkflowCard = ({ workflow, onWorkflowDeleted }: WorkflowCardProps)
           <Button
             appearance="primary"
             icon={<Play24Regular />}
-            onClick={handleViewDetails}
+            onClick={handleStartChat}
           >
-            View Details
+            Start Chat
           </Button>
-          <Button
-            appearance="subtle"
-            icon={<Settings24Regular />}
-            onClick={handleEdit}
-          >
-            Edit
-          </Button>
-          {onWorkflowDeleted && (
-            <Button
-              appearance="subtle"
-              onClick={() => onWorkflowDeleted(workflow.id)}
-            >
-              Delete
-            </Button>
-          )}
         </div>
       </div>
     </Card>

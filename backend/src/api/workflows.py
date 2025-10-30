@@ -30,10 +30,11 @@ async def list_workflows():
     Returns a dictionary mapping workflow IDs to their configurations:
     - id: Unique workflow identifier
     - name: Display name
+    - description: Workflow description
+    - status: Workflow status (active/inactive based on 'active' field)
+    - associatedAgents: List of participant agents
     - type: Workflow pattern (handoff, sequential, parallel, approval_chain)
     - coordinator: Primary coordinator agent
-    - participants: List of participant agents
-    - description: Workflow description
     - metadata: Additional workflow information
     
     Example Response:
@@ -41,9 +42,11 @@ async def list_workflows():
             "intelligent-handoff": {
                 "id": "intelligent-handoff",
                 "name": "Intelligent Handoff",
+                "description": "Multi-tier routing with evaluation",
+                "status": "ACTIVE",
+                "associatedAgents": ["router", "data-agent", "analyst", ...],
                 "type": "handoff",
                 "coordinator": "router",
-                "description": "Multi-tier routing with evaluation",
                 ...
             },
             ...
@@ -57,10 +60,25 @@ async def list_workflows():
         workflows = get_available_workflows()
         logger.info(f"[WORKFLOWS] Returning {len(workflows)} available workflows")
         
-        if workflows:
-            logger.info(f"[WORKFLOWS] Workflow IDs: {list(workflows.keys())}")
+        # Transform workflow configs to frontend format
+        transformed_workflows = {}
+        for workflow_id, config in workflows.items():
+            transformed_workflows[workflow_id] = {
+                "id": config.get("id"),
+                "name": config.get("name"),
+                "description": config.get("description"),
+                "type": config.get("type"),
+                "status": "ACTIVE" if config.get("active", False) else "INACTIVE",
+                "associatedAgents": config.get("participants", []),
+                "coordinator": config.get("coordinator"),
+                "metadata": config.get("metadata", {}),
+                "routing_rules": config.get("routing_rules", {}),
+            }
         
-        return workflows
+        if transformed_workflows:
+            logger.info(f"[WORKFLOWS] Workflow IDs: {list(transformed_workflows.keys())}")
+        
+        return transformed_workflows
         
     except ImportError as e:
         logger.error(f"[WORKFLOWS] Failed to import workflows module: {str(e)}", exc_info=True)

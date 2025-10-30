@@ -53,7 +53,7 @@ const useStyles = makeStyles({
   },
   content: {
     flex: 1,
-    overflow: 'hidden',
+    overflow: 'auto',
     position: 'relative',
   },
 })

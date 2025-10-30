@@ -47,7 +47,7 @@ WORKFLOW_REGISTRY = {
         "type": "handoff",
         "name": "Intelligent Handoff Workflow",
         "description": "Multi-tier routing with quality evaluation and intelligent re-routing. Routes queries through specialists (data-agent, analyst, order-agent) with quality evaluation at the end. If evaluator determines response is unsatisfactory, routes back to router for another attempt.",
-        "active": True,
+        "active": False,
         "coordinator": "router",
         "participants": [
             "router",           # Entry point and re-routing coordinator

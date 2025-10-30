@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
+import { useParams, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   makeStyles,
   tokens,
@@ -99,12 +99,17 @@ export const ChatPage = () => {
   const navigate = useNavigate()
   const { threadId } = useParams<{ threadId?: string }>()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const locationState = location.state as LocationState
+  
+  // Check for workflow in query params (from WorkflowCard) or location state
+  const workflowParam = searchParams.get('workflow')
+  const initialWorkflowId = workflowParam || locationState?.workflowId || 'sequential-data-analysis'
   
   // Agent and conversation state
   // Default to Sequential Data Analysis workflow
-  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || 'sequential-data-analysis')
-  const [currentWorkflowId, setCurrentWorkflowId] = useState<string | null>(locationState?.workflowId || 'sequential-data-analysis')
+  const [currentAgentId, setCurrentAgentId] = useState<string>(locationState?.agentId || initialWorkflowId)
+  const [currentWorkflowId, setCurrentWorkflowId] = useState<string | null>(initialWorkflowId)
   const [conversationName, setConversationName] = useState<string>('')
   
   // Chat state
@@ -140,6 +145,36 @@ export const ChatPage = () => {
 
     loadThreadData()
   }, [threadId, currentAgentId])
+
+  // Create a new thread eagerly when agent is selected but no thread exists
+  // This ensures thread appears in sidebar immediately
+  useEffect(() => {
+    const createThreadEagerly = async () => {
+      // Only create if:
+      // 1. We have an agent/workflow selected
+      // 2. We're not already viewing a thread
+      // 3. We haven't just navigated from a workflow card (check if it's the initial load)
+      if (currentAgentId && !threadId) {
+        try {
+          console.log('Creating thread eagerly for agent:', currentAgentId)
+          const newThread = await createChatThread(currentAgentId)
+          console.log('Thread created eagerly:', newThread.id)
+          // Navigate to the new thread
+          navigate(`/chat/${newThread.id}`, {
+            state: { agentId: currentAgentId },
+            replace: true, // Use replace to avoid adding to history
+          })
+        } catch (error) {
+          console.error('Failed to create thread eagerly:', error)
+          // Continue - user can still send messages and thread will be created then
+        }
+      }
+    }
+
+    // Debounce to avoid creating multiple threads on rapid agent switches
+    const timer = setTimeout(createThreadEagerly, 300)
+    return () => clearTimeout(timer)
+  }, [currentAgentId, threadId, navigate])
 
   // Handle agent change
   const handleAgentChange = (agentId: string) => {
@@ -235,21 +270,11 @@ export const ChatPage = () => {
     console.log('Message:', content)
     console.log('Thread ID:', threadId)
     
-    // Create a thread if one doesn't exist
-    let activeThreadId = threadId
+    // Thread should already exist due to eager creation
+    const activeThreadId = threadId
     if (!activeThreadId) {
-      try {
-        const newThread = await createChatThread(currentAgentId, conversationName || undefined)
-        activeThreadId = newThread.id
-        console.log('Created new thread:', activeThreadId)
-        // Navigate to the new thread
-        navigate(`/chat/${activeThreadId}`, {
-          state: { agentId: currentAgentId },
-        })
-      } catch (error) {
-        console.error('Failed to create thread:', error)
-        // Continue anyway - can save messages later
-      }
+      console.error('No thread ID available when sending message')
+      return
     }
     
     // Add user message
