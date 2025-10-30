@@ -20,6 +20,7 @@ import { AgentCard } from '@/components/agents/AgentCard'
 import { WorkflowCard } from '@/components/workflows/WorkflowCard'
 import { AgentCardService } from '@/services/agentCardService'
 import { Workflow } from '../types/workflow'
+import { config } from '@/config'
 
 type FilterType = 'all' | 'active' | 'inactive'
 
@@ -174,7 +175,7 @@ export const AgentsPage = () => {
     try {
       setLoadingWorkflows(true)
       setWorkflowError(null)
-      const response = await new AgentCardService().listWorkflows()
+      const response = await new AgentCardService(config.apiBaseUrl.replace('/api', '')).listWorkflows()
       setWorkflows(Object.values(response))
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : 'Failed to load workflows')
