@@ -151,7 +151,7 @@ export const streamChat = async (
     const token = await getAccessToken()
     
     // Determine if this is a workflow or agent based on known workflow IDs
-    const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+    const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
     const isWorkflow = workflowIds.includes(agentId)
     
     const url = isWorkflow 
@@ -208,66 +208,89 @@ export const streamChat = async (
       for (const msg of messages) {
         if (!msg.trim()) continue
 
-        // Parse SSE format: "data: {...}"
+        // Parse SSE format: "event: type\ndata: {...}"
         const lines = msg.split('\n')
+        let eventType = 'message' // default event type
+        let eventData = ''
+        
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6).trim()
-            
-            // Handle special events
-            if (data === '[DONE]') {
-              completeCallback?.(fullMessage)
-              return
-            }
-
-            try {
-              const parsed = JSON.parse(data)
-              
-              // Handle different event types from backend
-              // Match the actual SSE events from the backend streaming:
-              if (parsed.type === 'token' && parsed.content) {
-                const chunk = parsed.content
-                fullMessage += chunk
-                onChunk(chunk)
-              } else if (parsed.message) {
-                // Handle message events from backend (both agents and workflows)
-                // Backend sends: { "message": "..." }
-                fullMessage = parsed.message
-                onChunk(parsed.message)
-              } else if (parsed.type === 'done' || parsed.complete) {
-                completeCallback?.(fullMessage)
-                return
-              } else if (parsed.type === 'error') {
-                errorCallback?.(new Error(parsed.error || 'Unknown error'))
-                return
-              } else if (parsed.type === 'trace_start' || parsed.type === 'trace_update' || parsed.type === 'trace_end') {
-                // Pass trace events to the trace event handler if provided
-                if (traceEventCallback) {
-                  traceEventCallback(parsed)
-                }
-                console.debug('Received trace event:', parsed.type)
-              } else if (parsed.workflow_type || parsed.workflow_id) {
-                // Handle workflow metadata events - convert to trace events for display
-                // Example: { workflow_id: 'sequential-data-analysis', workflow_type: 'sequential', pattern: '...', ... }
-                const traceEvent = {
-                  type: 'trace_end',
-                  tool_name: parsed.pattern || `${parsed.workflow_type} workflow`,
-                  step_id: parsed.workflow_id,
-                  metadata: parsed,
-                }
-                if (traceEventCallback) {
-                  traceEventCallback(traceEvent)
-                }
-                console.debug('Received workflow metadata:', parsed.workflow_type)
-              } else if (parsed.type === 'heartbeat') {
-                // Ignore heartbeat events
-                console.debug('Received heartbeat')
-              }
-            } catch (e) {
-              // If not JSON, treat as plain text chunk
-              console.warn('Failed to parse SSE event:', e)
-            }
+          if (line.startsWith('event: ')) {
+            eventType = line.substring(7).trim()
+          } else if (line.startsWith('data: ')) {
+            eventData = line.substring(6).trim()
           }
+        }
+        
+        if (!eventData) continue
+        
+        // Handle special events
+        if (eventData === '[DONE]') {
+          completeCallback?.(fullMessage)
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(eventData)
+          
+          // Handle phase_complete events from RFQ workflow
+          if (eventType === 'phase_complete') {
+            // Phase complete event: create a new message for this phase
+            // Pass to trace event handler which we'll use for phases
+            if (traceEventCallback) {
+              traceEventCallback({
+                type: 'phase_complete',
+                phase: parsed.phase,
+                message: parsed.message,
+                data: parsed.data,
+              })
+            }
+            console.debug('Received phase complete:', parsed.phase)
+            continue
+          }
+          
+          // Handle different event types from backend
+          // Match the actual SSE events from the backend streaming:
+          if (parsed.type === 'token' && parsed.content) {
+            const chunk = parsed.content
+            fullMessage += chunk
+            onChunk(chunk)
+          } else if (parsed.message) {
+            // Handle message events from backend (both agents and workflows)
+            // Backend sends: { "message": "..." }
+            fullMessage = parsed.message
+            onChunk(parsed.message)
+          } else if (parsed.type === 'done' || parsed.complete) {
+            completeCallback?.(fullMessage)
+            return
+          } else if (parsed.type === 'error') {
+            errorCallback?.(new Error(parsed.error || 'Unknown error'))
+            return
+          } else if (parsed.type === 'trace_start' || parsed.type === 'trace_update' || parsed.type === 'trace_end') {
+            // Pass trace events to the trace event handler if provided
+            if (traceEventCallback) {
+              traceEventCallback(parsed)
+            }
+            console.debug('Received trace event:', parsed.type)
+          } else if (parsed.workflow_type || parsed.workflow_id) {
+            // Handle workflow metadata events - convert to trace events for display
+            // Example: { workflow_id: 'sequential-data-analysis', workflow_type: 'sequential', pattern: '...', ... }
+            const traceEvent = {
+              type: 'trace_end',
+              tool_name: parsed.pattern || `${parsed.workflow_type} workflow`,
+              step_id: parsed.workflow_id,
+              metadata: parsed,
+            }
+            if (traceEventCallback) {
+              traceEventCallback(traceEvent)
+            }
+            console.debug('Received workflow metadata:', parsed.workflow_type)
+          } else if (parsed.type === 'heartbeat') {
+            // Ignore heartbeat events
+            console.debug('Received heartbeat')
+          }
+        } catch (e) {
+          // If not JSON, treat as plain text chunk
+          console.warn('Failed to parse SSE event:', e)
         }
       }
     }

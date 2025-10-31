@@ -10,8 +10,8 @@ Supports:
 import asyncio
 import json
 import logging
-from typing import Optional
-from datetime import datetime
+from typing import Optional, Any
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Path, Body
 from fastapi.responses import StreamingResponse
 
@@ -20,6 +20,29 @@ from src.persistence.models import ChatRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/workflows", tags=["Workflows"])
+
+
+def serialize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert objects to JSON-serializable format.
+    Handles Pydantic models, datetime objects, and nested structures.
+    """
+    from pydantic import BaseModel
+    
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(mode='json')
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: serialize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_json(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(serialize_for_json(item) for item in obj)
+    elif isinstance(obj, set):
+        return [serialize_for_json(item) for item in obj]
+    else:
+        return obj
 
 
 @router.get("", name="list_workflows")
@@ -192,6 +215,8 @@ async def execute_workflow(
                     }
                     yield f"event: metadata\ndata: {json.dumps(metadata_dict)}\n\n"
                     await asyncio.sleep(0.1)
+                    
+                    logger.info("Handoff workflow events sent, proceeding to done event...")
                 
                 elif workflow_type == 'sequential':
                     # Import and execute sequential orchestrator
@@ -234,11 +259,130 @@ async def execute_workflow(
                     }
                     yield f"event: metadata\ndata: {json.dumps(metadata_dict)}\n\n"
                     await asyncio.sleep(0.1)
+                    
+                    logger.info("Sequential workflow events sent, proceeding to done event...")
+                
+                elif workflow_type == 'rfq':
+                    # Import and execute RFQ procurement workflow
+                    from src.agents.workflows.rfq.orchestrators.rfq_workflow_orchestrator import RFQWorkflowOrchestrator
+                    from src.agents.workflows.rfq.models import RFQRequest
+                    
+                    logger.info("Starting RFQ procurement workflow execution...")
+                    
+                    # Parse RFQ request from message
+                    # Expected format: JSON with product details or natural language
+                    import json as json_lib
+                    try:
+                        # Try to parse as JSON first
+                        rfq_data = json_lib.loads(request.message)
+                        
+                        # Create RFQRequest from JSON
+                        rfq_request = RFQRequest(
+                            request_id=rfq_data.get('request_id', f'rfq-{datetime.now().strftime("%Y%m%d%H%M%S")}'),
+                            product_id=rfq_data.get('product_id', 'PROD-001'),
+                            product_name=rfq_data.get('product_name', 'Product'),
+                            category=rfq_data.get('category', 'industrial_sensors'),
+                            quantity=rfq_data.get('quantity', 1000),
+                            unit=rfq_data.get('unit', 'pieces'),
+                            required_certifications=rfq_data.get('required_certifications', []),
+                            special_requirements=rfq_data.get('special_requirements'),
+                            desired_delivery_date=datetime.fromisoformat(rfq_data['desired_delivery_date']) if rfq_data.get('desired_delivery_date') else None,
+                            max_lead_time_days=rfq_data.get('max_lead_time_days', 30),
+                            budget_amount=rfq_data.get('budget_amount', 100000.0),
+                            requestor_name=rfq_data.get('requestor_name', 'Procurement Manager'),
+                            requestor_email=rfq_data.get('requestor_email', 'procurement@company.com'),
+                        )
+                    except (json_lib.JSONDecodeError, KeyError, ValueError) as e:
+                        # Fall back to default request for demo
+                        logger.warning(f"Could not parse RFQ JSON, using default: {e}")
+                        rfq_request = RFQRequest(
+                            request_id=f'rfq-demo-{datetime.now().strftime("%Y%m%d%H%M%S")}',
+                            product_id='PROD-SENSOR-001',
+                            product_name='High-Precision Industrial Sensors',
+                            category='industrial_sensors',
+                            quantity=1000,
+                            unit='pieces',
+                            required_certifications=['ISO-9001'],
+                            special_requirements='Temperature range: -40°C to 85°C, Accuracy: ±0.1°C',
+                            desired_delivery_date=datetime.now() + timedelta(days=30),
+                            max_lead_time_days=30,
+                            budget_amount=100000.0,
+                            requestor_name='Procurement Manager',
+                            requestor_email='procurement@company.com',
+                        )
+                    
+                    # Create orchestrator
+                    thread_id = request.thread_id or f"thread-{workflow_id}"
+                    workflow_exec_id = f"wf-{workflow_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    
+                    # Create thread in database if it doesn't exist
+                    from src.persistence.threads import get_thread_repository
+                    repo = get_thread_repository()
+                    
+                    try:
+                        existing_thread = await repo.get(thread_id, workflow_id)
+                    except Exception:
+                        existing_thread = None
+                    
+                    if not existing_thread:
+                        # Create new thread using the repo's create method, but with our specific thread_id
+                        # Since the repo.create() generates its own ID, we'll need to use a different approach
+                        # Let's create the thread directly
+                        from src.persistence.models import Thread, Message
+                        new_thread = Thread(
+                            id=thread_id,
+                            agentId=workflow_id,
+                            workflowId=workflow_id,
+                            title=f"RFQ Request {rfq_request.request_id}",
+                            messages=[],
+                            runs=[],
+                            status="active",
+                            created_at=datetime.utcnow(),
+                            updated_at=datetime.utcnow(),
+                        )
+                        # Save using the container directly
+                        await repo.container.create_item(body=new_thread.model_dump(by_alias=True))
+                        logger.info(f"Created thread {thread_id} for workflow {workflow_id}")
+                    
+                    orchestrator = RFQWorkflowOrchestrator()
+                    
+                    # Execute workflow with streaming - yields detailed messages for each phase
+                    try:
+                        async for phase_result in orchestrator.execute_full_workflow_streaming(
+                            rfq_request=rfq_request,
+                            workflow_id=workflow_exec_id,
+                            buyer_name=rfq_request.requestor_name,
+                            buyer_email=rfq_request.requestor_email,
+                            wait_for_human=False,  # Auto-approve (true approval would require workflow persistence)
+                        ):
+                            # Send complete phase message as a separate message event
+                            phase_message = phase_result.get("message", "")
+                            phase_name = phase_result.get("phase", "unknown")
+                            phase_data = phase_result.get("data", {})
+                            
+                            # Convert phase_data to JSON-serializable format using helper
+                            try:
+                                serializable_data = serialize_for_json(phase_data) if phase_data else {}
+                            except Exception as serialize_error:
+                                logger.warning(f"Failed to serialize phase_data: {serialize_error}")
+                                serializable_data = {}
+                            
+                            # Send as a complete phase message (not a token/chunk)
+                            yield f"event: phase_complete\ndata: {json.dumps({'phase': phase_name, 'message': phase_message, 'data': serializable_data})}\n\n"
+                            await asyncio.sleep(0.1)
+                    except Exception as e:
+                        logger.error(f"RFQ workflow execution error: {e}", exc_info=True)
+                        raise
+                    
+                    logger.info(f"RFQ workflow streaming complete")
                 
                 else:
                     # Unknown workflow type
                     yield f"event: message\ndata: {json.dumps({'message': f'Workflow type {workflow_type} not yet implemented'})}\n\n"
+                
+                logger.info(f"Workflow {workflow_id} complete, sending done event...")
                 yield f"event: done\ndata: {json.dumps({'complete': True})}\n\n"
+                logger.info("Done event sent successfully")
             
             except Exception as e:
                 logger.error(f"Error in workflow event generator: {str(e)}", exc_info=True)
@@ -486,7 +630,7 @@ async def update_workflow_thread(
 async def add_workflow_thread_message(
     workflow_id: str = Path(..., description="Workflow ID"),
     thread_id: str = Path(..., description="Thread ID"),
-    request: Optional[ChatRequest] = None
+    request: Optional[dict] = Body(None)
 ):
     """
     Add a message to a workflow thread.
@@ -494,13 +638,22 @@ async def add_workflow_thread_message(
     Args:
         workflow_id: ID of the workflow
         thread_id: ID of the thread
-        request: Chat request with message and role
+        request: Dict with 'message' and 'role' fields
         
     Returns:
         Updated thread object
     """
     if request is None:
         raise HTTPException(status_code=400, detail="Request body required")
+    
+    # Debug: Log what we're receiving
+    logger.info(f"Received request body: {request}")
+    logger.info(f"Request type: {type(request)}")
+    logger.info(f"Request keys: {request.keys() if isinstance(request, dict) else 'N/A'}")
+    
+    # Validate required fields
+    if 'message' not in request:
+        raise HTTPException(status_code=422, detail="Field 'message' is required")
     
     try:
         from src.persistence.threads import get_thread_repository
@@ -513,10 +666,23 @@ async def add_workflow_thread_message(
             raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
         
         # Create message
+        from typing import cast, Literal
+        role = request.get('role', 'assistant')
+        if role not in ['user', 'assistant', 'system']:
+            role = 'assistant'
+        role = cast(Literal["user", "assistant", "system"], role)
+        
+        # Extract message content - handle both string and dict
+        message_content = request['message']
+        if isinstance(message_content, dict):
+            # If it's a dict, try to extract the content field
+            message_content = message_content.get('content', str(message_content))
+        logger.info(f"Final message content type: {type(message_content)}, value: {message_content[:100] if len(str(message_content)) > 100 else message_content}")
+        
         message = Message(
             id=f"msg_{int(asyncio.get_event_loop().time() * 1000)}",
-            role=getattr(request, 'role', 'assistant'),  # Default to 'assistant' if not provided
-            content=request.message,
+            role=role,
+            content=str(message_content),
             timestamp=datetime.utcnow()
         )
         

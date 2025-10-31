@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { makeStyles, shorthands, Card } from '@fluentui/react-components';
-import { Chat24Regular, Bot24Regular, Book24Regular, BuildingMultiple24Regular } from '@fluentui/react-icons';
+import { Chat24Regular, Bot24Regular, Book24Regular, BuildingMultiple24Regular, ShoppingBag24Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   container: {
@@ -98,6 +98,15 @@ export const HowItWorksLanding: React.FC = () => {
         icon: <BuildingMultiple24Regular />,
         date: 'October 28, 2025',
         readTime: '12 min read',
+    },
+    {
+      id: 'rfq-workflow',
+      title: 'RFQ Procurement Workflow',
+      description:
+        'Discover how the RFQ workflow automates vendor selection with 7 sequential phases, parallel evaluation tracks, and human-in-the-loop approval—reducing procurement time from hours to seconds.',
+      icon: <ShoppingBag24Regular />,
+      date: 'October 31, 2025',
+      readTime: '18 min read',
     },
     {
       id: 'thread-management',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { makeStyles, shorthands, Button } from '@fluentui/react-components';
-import { ArrowLeft24Regular, Chat24Regular, Bot24Regular } from '@fluentui/react-icons';
+import { ArrowLeft24Regular, Chat24Regular, Bot24Regular, BuildingMultiple24Regular, ShoppingBag24Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   container: {
@@ -192,24 +192,36 @@ interface ArticleLayoutProps {
   author: string;
 }
 
-const articles: ArticleInfo[] = [
-  {
-    id: 'thread-management',
-    title: 'Thread Management',
-    icon: <Chat24Regular />,
-    date: 'October 28, 2025',
-    author: 'Engineering Team',
-  },
-  {
-    id: 'agent-definitions',
-    title: 'Agent Definitions',
-    icon: <Bot24Regular />,
-    date: 'October 28, 2025',
-    author: 'Engineering Team',
-  },
-];
-
-export const ArticleLayout: React.FC<ArticleLayoutProps> = ({ children, title, date, author }) => {
+  const articles: ArticleInfo[] = [
+    {
+      id: 'thread-management',
+      title: 'Thread Management',
+      icon: <Chat24Regular />,
+      date: 'October 28, 2025',
+      author: 'Engineering Team',
+    },
+    {
+      id: 'agent-definitions',
+      title: 'Agent Definitions',
+      icon: <Bot24Regular />,
+      date: 'October 28, 2025',
+      author: 'Engineering Team',
+    },
+    {
+      id: 'architecture',
+      title: 'Architecture & Infrastructure',
+      icon: <BuildingMultiple24Regular />,
+      date: 'October 28, 2025',
+      author: 'Engineering Team',
+    },
+    {
+      id: 'rfq-workflow',
+      title: 'RFQ Procurement Workflow',
+      icon: <ShoppingBag24Regular />,
+      date: 'January 8, 2025',
+      author: 'Engineering Team',
+    },
+  ];export const ArticleLayout: React.FC<ArticleLayoutProps> = ({ children, title, date, author }) => {
   const styles = useStyles();
   const navigate = useNavigate();
   const { articleId } = useParams<{ articleId: string }>();

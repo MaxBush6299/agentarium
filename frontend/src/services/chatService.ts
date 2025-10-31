@@ -126,7 +126,7 @@ export const listThreads = async (agentId: string, limit?: number): Promise<Chat
   const query = params.toString() ? `?${params.toString()}` : ''
   
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 
@@ -142,7 +142,7 @@ export const listThreads = async (agentId: string, limit?: number): Promise<Chat
  */
 export const getChatThread = async (agentId: string, threadId: string): Promise<ChatThread> => {
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 
@@ -157,7 +157,7 @@ export const getChatThread = async (agentId: string, threadId: string): Promise<
  */
 export const createChatThread = async (agentId: string, title?: string): Promise<ChatThread> => {
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 
@@ -172,7 +172,7 @@ export const createChatThread = async (agentId: string, title?: string): Promise
  */
 export const deleteChatThread = async (agentId: string, threadId: string): Promise<void> => {
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 
@@ -187,7 +187,7 @@ export const deleteChatThread = async (agentId: string, threadId: string): Promi
  */
 export const updateChatThread = async (agentId: string, threadId: string, updates: { title?: string }): Promise<ChatThread> => {
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 
@@ -230,7 +230,7 @@ export const saveThreadMessage = async (
   role: 'user' | 'assistant' = 'assistant'
 ): Promise<ChatThread> => {
   // Check if this is a workflow ID or agent ID
-  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow']
+  const workflowIds = ['intelligent-handoff', 'sequential-data-analysis', 'data-analysis-pipeline', 'multi-perspective-analysis', 'change-approval-workflow', 'rfq-procurement']
   const isWorkflow = workflowIds.includes(agentId)
   
   const endpoint = isWorkflow 

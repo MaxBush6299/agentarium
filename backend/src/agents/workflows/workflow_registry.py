@@ -161,6 +161,63 @@ WORKFLOW_REGISTRY = {
             "created_at": "2025-10-29",
             "tags": ["approval", "sequential", "operational"],
         }
+    },
+    "rfq-procurement": {
+        "id": "rfq-procurement",
+        "type": "rfq",
+        "name": "RFQ Procurement Workflow",
+        "description": "Complete end-to-end RFQ workflow: product requirements analysis → vendor qualification → parallel quote submission → multi-track evaluation (compliance, delivery, financial) → comparison analysis → negotiation strategy → human approval gate → purchase order generation. Coordinates 7 workflow phases with full traceability.",
+        "active": True,
+        "coordinator": None,  # Custom orchestrator, not agent-based
+        "participants": [
+            "product-review-agent",           # Phase 2: Analyze product requirements
+            "vendor-qualification-agent",     # Phase 2: Qualify vendors
+            "rfq-submission-agent",           # Phase 3: Submit RFQs to vendors
+            "quote-parsing-agent",            # Phase 3: Parse vendor quotes
+            "compliance-evaluator",           # Phase 3: Compliance track
+            "delivery-evaluator",             # Phase 3: Delivery risk track
+            "financial-evaluator",            # Phase 3: Financial analysis track
+            "comparison-analysis-agent",      # Phase 4: Compare vendors
+            "negotiation-strategy-agent",     # Phase 5: Generate negotiation plan
+            "human-gate-agent",               # Phase 6: Approval workflow
+            "purchase-order-agent",           # Phase 7: Generate & issue PO
+        ],
+        "max_handoffs": 0,  # Not applicable - orchestrated workflow
+        "routing_rules": {
+            "workflow_pattern": "multi_phase_orchestration",
+            "phases": [
+                "preprocessing",           # Phase 2: Requirements + Vendors
+                "parallel_evaluation",     # Phase 3: Submissions + Quotes + Evaluations
+                "comparison",              # Phase 4: Analysis
+                "negotiation",             # Phase 5: Strategy
+                "human_gate",              # Phase 6: Approval
+                "purchase_order",          # Phase 7: PO Generation
+            ],
+            "parallel_tracks": ["compliance", "delivery", "financial"],
+            "requires_human_approval": True,
+            "supports_auto_approve": True,  # For testing
+        },
+        "metadata": {
+            "version": "1.0.0",
+            "created_at": "2025-10-30",
+            "tags": ["rfq", "procurement", "multi-phase", "parallel-evaluation", "approval"],
+            "estimated_duration_seconds": 20,
+            "input_schema": {
+                "product_name": "string",
+                "quantity": "integer",
+                "technical_specifications": "string",
+                "required_certifications": "array[string]",
+                "delivery_deadline": "date",
+                "budget_range_min": "number",
+                "budget_range_max": "number",
+            },
+            "output_schema": {
+                "purchase_order": "PurchaseOrder",
+                "vendor_evaluations": "array[VendorEvaluation]",
+                "comparison_report": "ComparisonReport",
+                "negotiation_recommendation": "NegotiationRecommendation",
+            },
+        }
     }
 }
 

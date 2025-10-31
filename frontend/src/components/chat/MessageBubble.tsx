@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Avatar,
   Text,
@@ -6,9 +6,10 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { Bot24Regular, Person24Regular } from '@fluentui/react-icons';
+import { Bot24Regular, Person24Regular, ChevronDown20Regular, ChevronRight20Regular } from '@fluentui/react-icons';
 import ReactMarkdown from 'react-markdown';
 import { MessageRole, type MessageBubbleProps } from '../../types/message';
+import { HumanGateActions } from './HumanGateActions';
 
 const useStyles = makeStyles({
   messageContainer: {
@@ -126,13 +127,46 @@ const useStyles = makeStyles({
     animationDuration: '1s',
     animationIterationCount: 'infinite',
   },
+  phaseContainer: {
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.margin(tokens.spacingVerticalS, 0),
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.overflow('hidden'),
+  },
+  phaseHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    cursor: 'pointer',
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+    '&:hover': {
+      backgroundColor: tokens.colorNeutralBackground3Hover,
+    },
+  },
+  phaseTitle: {
+    flex: 1,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+  },
+  phaseContent: {
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    maxHeight: '400px',
+    ...shorthands.overflow('auto'),
+  },
+  phaseContentCollapsed: {
+    display: 'none',
+  },
 });
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const styles = useStyles();
+  const [isExpanded, setIsExpanded] = useState(true); // Start expanded by default
 
   const isUser = message.role === MessageRole.USER;
   const isAssistant = message.role === MessageRole.ASSISTANT;
+  const isPhaseMessage = message.metadata?.isPhaseMessage === true;
 
   const formatTime = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -188,13 +222,54 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           <Text className={styles.errorContent}>
             ❌ Error: {message.error}
           </Text>
+        ) : isPhaseMessage && message.metadata?.phase ? (
+          // Render phase message with collapsible UI
+          <div className={styles.phaseContainer}>
+            <div 
+              className={styles.phaseHeader}
+              onClick={() => setIsExpanded(!isExpanded)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setIsExpanded(!isExpanded)
+                }
+              }}
+            >
+              {isExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+              <Text className={styles.phaseTitle}>
+                {message.metadata.phase}
+              </Text>
+            </div>
+            <div className={isExpanded ? styles.phaseContent : styles.phaseContentCollapsed}>
+              <div className={styles.content}>
+                <ReactMarkdown>
+                  {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className={styles.content}>
             {isAssistant ? (
               <>
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                <ReactMarkdown>
+                  {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+                </ReactMarkdown>
                 {message.isStreaming && (
                   <span className={styles.streamingIndicator} />
+                )}
+                {/* Human Gate UI */}
+                {message.humanGateActions && message.humanGateActions.length > 0 && (
+                  <HumanGateActions
+                    onAction={(action, result) => {
+                      // Optionally handle result, e.g., update UI or show confirmation
+                      // You can trigger a callback to parent here if needed
+                      // For now, just log
+                      console.log('HumanGate action:', action, result)
+                    }}
+                    disabled={message.isStreaming}
+                  />
                 )}
               </>
             ) : (

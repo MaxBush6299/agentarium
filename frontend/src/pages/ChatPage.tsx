@@ -12,6 +12,7 @@ import {
 } from '@fluentui/react-components'
 import { MessageList } from '../components/chat/MessageList'
 import { InputBox } from '../components/chat/InputBox'
+import { RFQRequestForm, RFQFormData } from '../components/chat/RFQRequestForm'
 import { ExportButton } from '../components/chat/ExportButton'
 import { AgentSelector } from '../components/chat/AgentSelector'
 import { ConversationName } from '../components/chat/ConversationName'
@@ -115,7 +116,7 @@ export const ChatPage = () => {
   // Chat state
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const { traces, addTraceEvent, clearTraces } = useTraces()
+  const { traces, clearTraces } = useTraces()
 
   // Load thread data on mount
   useEffect(() => {
@@ -198,6 +199,12 @@ export const ChatPage = () => {
     setMessages([])
     clearTraces()
     setConversationName('')
+    
+    // Navigate to chat root to trigger new thread creation
+    navigate('/chat', {
+      state: { agentId: workflowId },
+      replace: true,
+    })
 
     console.log('Switched to workflow:', workflowId)
   }
@@ -297,34 +304,70 @@ export const ChatPage = () => {
       isStreaming: true,
     }
     setMessages((prev) => [...prev, assistantMessage])
-    setIsLoading(true)
-    clearTraces()
 
-    console.log('Starting stream to:', `${currentAgentId}/chat`)
-    console.log('Using thread ID:', activeThreadId)
-    
-    try {
-      await streamChat(
-        currentAgentId,
-        content,
-        activeThreadId || null,
-        // onChunk: Update message content as chunks arrive
-        (chunk: string) => {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: msg.content + chunk, isStreaming: true }
-                : msg
-            )
+    setIsLoading(true)
+
+    // Stream response
+    await streamChat(
+      currentAgentId,
+      content,
+      activeThreadId,
+      (chunk: string) => {
+        // Update streaming message
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: msg.content + chunk }
+              : msg
           )
-        },
-        // onTraceEvent: Add trace events as they arrive
-        (traceEvent: unknown) => {
-          const event = traceEvent as Record<string, unknown>
-          addTraceEvent(event as any)
-        },
-        // onComplete: Mark streaming as done and save to thread
-        (fullMessage: string) => {
+        )
+      },
+      (event: Record<string, unknown>) => {
+        // Handle phase_complete events for RFQ workflow
+        if (event.type === 'phase_complete') {
+          const phaseMessage = event.message as string
+          const phaseName = event.phase as string
+          
+          // Create a new assistant message for this phase
+          const phaseMessageId = `${Date.now()}_${phaseName}`
+          const newPhaseMessage: Message = {
+            id: phaseMessageId,
+            role: MessageRole.ASSISTANT,
+            content: phaseMessage,
+            timestamp: new Date(),
+            agentId: currentAgentId,
+            isStreaming: false,
+            metadata: {
+              phase: phaseName,
+              isPhaseMessage: true,
+              data: (event.data as Record<string, unknown>) || {},
+            },
+          }
+          
+          // Remove the original placeholder streaming message if this is the first phase
+          setMessages((prev) => {
+            const hasPlaceholder = prev.some(m => m.id === assistantMessageId && m.content === '')
+            if (hasPlaceholder) {
+              // Replace placeholder with first phase message
+              return prev.map(m => m.id === assistantMessageId ? newPhaseMessage : m)
+            } else {
+              // Add as new message
+              return [...prev, newPhaseMessage]
+            }
+          })
+          
+          // Save phase message to thread
+          saveMessagesToThread(activeThreadId, '', phaseMessage).catch(err => 
+            console.error('Failed to save phase message:', err)
+          )
+        } else {
+          // Handle trace events (optional for workflows)
+          console.debug('Trace event:', event)
+        }
+      },
+      (fullMessage: string) => {
+        // Finalize message (only for non-phase workflows)
+        if (!currentAgentId.includes('rfq')) {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
@@ -332,47 +375,49 @@ export const ChatPage = () => {
                 : msg
             )
           )
-          setIsLoading(false)
           
-          // Save messages to thread if thread exists
-          if (activeThreadId) {
-            saveMessagesToThread(activeThreadId, content, fullMessage)
-          }
-        },
-        // onError: Show error message
-        (error: Error) => {
-          console.error('Streaming error:', error)
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? {
-                    ...msg,
-                    content: `Error: ${error.message}`,
-                    error: error.message,
-                    isStreaming: false,
-                  }
-                : msg
-            )
-          )
-          setIsLoading(false)
+          // Save both messages to thread
+          saveMessagesToThread(activeThreadId, content, fullMessage)
+        } else {
+          // For RFQ workflow, just remove placeholder if still there
+          setMessages((prev) => prev.filter(m => !(m.id === assistantMessageId && m.content === '')))
         }
-      )
-    } catch (error) {
-      console.error('Failed to send message:', error)
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? {
-                ...msg,
-                content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                isStreaming: false,
-              }
-            : msg
+        setIsLoading(false)
+      },
+      (error: Error) => {
+        // Handle error
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: '', error: error.message, isStreaming: false }
+              : msg
+          )
         )
-      )
-      setIsLoading(false)
+        setIsLoading(false)
+      }
+    )
+  }
+
+  // Handler for RFQ form submission
+  const handleRFQSubmit = async (rfqData: RFQFormData) => {
+    // Convert RFQ form data to JSON string
+    const rfqJson = JSON.stringify(rfqData, null, 2)
+    
+    // Update thread title with RFQ number
+    if (threadId) {
+      try {
+        await updateChatThread(currentAgentId, threadId, {
+          title: rfqData.request_id,
+        })
+        // Update local state
+        setConversationName(rfqData.request_id)
+      } catch (error) {
+        console.error('Failed to update thread title:', error)
+      }
     }
+    
+    // Send as a regular message
+    await handleSendMessage(rfqJson)
   }
 
   return (
@@ -430,7 +475,12 @@ export const ChatPage = () => {
               <MessageList messages={messages} traces={traces} isLoading={isLoading} />
             </div>
           </div>
-          <InputBox onSend={handleSendMessage} disabled={isLoading} />
+          {/* Show RFQ form for RFQ workflow, otherwise show regular input */}
+          {currentWorkflowId === 'rfq-procurement' ? (
+            <RFQRequestForm onSubmit={handleRFQSubmit} disabled={isLoading} />
+          ) : (
+            <InputBox onSend={handleSendMessage} disabled={isLoading} />
+          )}
         </div>
       </div>
     </div>

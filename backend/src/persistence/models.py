@@ -278,13 +278,15 @@ class ChatRequest(BaseModel):
     message: str = Field(description="User message content", min_length=1, max_length=10000)
     thread_id: Optional[str] = Field(default=None, description="Existing thread ID (optional, creates new if not provided)")
     stream: bool = Field(default=True, description="Enable SSE streaming")
+    role: Optional[Literal["user", "assistant", "system"]] = Field(default="user", description="Message role: 'user', 'assistant', or 'system'")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "message": "How do I create a storage account in Azure?",
                 "thread_id": "thread_789",
-                "stream": True
+                "stream": True,
+                "role": "user"
             }
         }
 
@@ -295,6 +297,20 @@ class ChatResponse(BaseModel):
     run_id: str = Field(description="Run ID")
     message: Message = Field(description="Assistant response message")
     tokens_used: int = Field(description="Total tokens used")
+
+
+class AddMessageRequest(BaseModel):
+    """Request model for adding a message to a thread."""
+    message: str = Field(description="Message content", min_length=1, max_length=10000)
+    role: Literal["user", "assistant", "system"] = Field(default="assistant", description="Message role")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Here's the analysis you requested...",
+                "role": "assistant"
+            }
+        }
 
 
 class ThreadListResponse(BaseModel):

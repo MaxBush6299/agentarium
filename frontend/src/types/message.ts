@@ -42,6 +42,14 @@ export interface Message {
   agentName?: string;
   isStreaming?: boolean;
   error?: string;
+  humanGateActions?: Array<'approve' | 'edit' | 'reject'>;
+  humanGateData?: any;
+  metadata?: {
+    phase?: string;
+    isPhaseMessage?: boolean;
+    data?: Record<string, unknown>;
+    [key: string]: any;
+  };
 }
 
 export interface MessageBubbleProps {

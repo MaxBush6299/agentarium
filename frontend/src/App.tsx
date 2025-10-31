@@ -14,6 +14,7 @@ import { HowItWorksLanding } from './pages/how-it-works/HowItWorksLanding'
 import { ThreadManagementArticle } from './pages/how-it-works/ThreadManagementArticle'
 import { AgentDefinitionsArticle } from './pages/how-it-works/AgentDefinitionsArticle'
 import { ArchitectureArticle } from './pages/how-it-works/ArchitectureArticle';
+import { RFQWorkflowArticle } from './pages/how-it-works/RFQWorkflowArticle';
 import './styles/App.css'
 
 /**
@@ -63,6 +64,7 @@ export const App = () => {
               <Route path="thread-management" element={<ThreadManagementArticle />} />
               <Route path="agent-definitions" element={<AgentDefinitionsArticle />} />
               <Route path="architecture" element={<ArchitectureArticle />} />
+              <Route path="rfq-workflow" element={<RFQWorkflowArticle />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
