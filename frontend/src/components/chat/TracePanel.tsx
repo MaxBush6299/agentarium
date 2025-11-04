@@ -204,6 +204,84 @@ const useStyles = makeStyles({
     textTransform: 'uppercase',
     fontSize: tokens.fontSizeBase100,
   },
+  agentInteractionsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap(tokens.spacingVerticalM),
+  },
+  agentInteraction: {
+    ...shorthands.padding(tokens.spacingVerticalM),
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusSmall,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke3),
+  },
+  agentHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: tokens.spacingVerticalS,
+  },
+  agentTiming: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+  },
+  toolCallsSection: {
+    marginBottom: tokens.spacingVerticalS,
+  },
+  sectionLabel: {
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  toolCall: {
+    marginLeft: tokens.spacingHorizontalM,
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  toolName: {
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+  },
+  toolOutput: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    fontFamily: 'monospace',
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+    borderRadius: tokens.borderRadiusSmall,
+    marginTop: tokens.spacingVerticalXS,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
+  },
+  toolDetails: {
+    marginLeft: tokens.spacingHorizontalM,
+    marginTop: tokens.spacingVerticalXXS,
+  },
+  toolArguments: {
+    marginBottom: tokens.spacingVerticalXXS,
+  },
+  toolResult: {
+    marginTop: tokens.spacingVerticalXXS,
+  },
+  toolLabel: {
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXXS,
+  },
+  agentResponse: {
+    marginTop: tokens.spacingVerticalS,
+  },
+  responseText: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground1,
+    lineHeight: tokens.lineHeightBase300,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.padding(tokens.spacingVerticalS),
+    borderRadius: tokens.borderRadiusSmall,
+  },
 })
 
 /**
@@ -252,6 +330,15 @@ const TraceItem: React.FC<TraceItemProps> = ({ trace, depth, isStreaming }) => {
         return 'brand'
     }
   }
+
+  // Debug logging
+  console.log('🔍 TraceItem render:', {
+    toolName: trace.tool_name,
+    hasOutput: !!trace.output,
+    outputKeys: trace.output ? Object.keys(trace.output) : [],
+    hasAgentInteractions: trace.output?.agent_interactions ? true : false,
+    agentInteractionsCount: (trace.output?.agent_interactions as any)?.length || 0
+  });
 
   // Extract request and result from input
   const getRequestData = () => {
@@ -402,10 +489,79 @@ const TraceItem: React.FC<TraceItemProps> = ({ trace, depth, isStreaming }) => {
 
           {trace.output && (
             <div className={styles.detailsSection}>
-              <div className={styles.detailsTitle}>Output</div>
-              <div className={styles.codeBlock}>
-                {JSON.stringify(trace.output, null, 2)}
+              <div className={styles.detailsTitle}>
+                {trace.output.agent_interactions ? 'Agent Interactions' : 'Output'}
               </div>
+              {trace.output.agent_interactions ? (
+                <div className={styles.agentInteractionsList}>
+                  {(trace.output.agent_interactions as any[]).map((interaction, idx) => {
+                    console.log('🔍 Agent interaction:', interaction.agent_id, 'tool_calls:', interaction.tool_calls);
+                    return (
+                    <div key={idx} className={styles.agentInteraction}>
+                      <div className={styles.agentHeader}>
+                        <Text weight="semibold">{interaction.agent_id}</Text>
+                        <Text className={styles.agentTiming}>
+                          {interaction.execution_time_ms}ms
+                        </Text>
+                      </div>
+                      
+                      {interaction.tool_calls && interaction.tool_calls.length > 0 && (
+                        <div className={styles.toolCallsSection}>
+                          <Text className={styles.sectionLabel}>Tool Calls: ({interaction.tool_calls.length})</Text>
+                          {interaction.tool_calls.map((tool: any, toolIdx: number) => {
+                            console.log('🔧 Rendering tool call:', tool);
+                            return (
+                            <div key={toolIdx} className={styles.toolCall}>
+                              <Text className={styles.toolName}>
+                                {tool.name}
+                                {tool.duration_ms && ` (${tool.duration_ms.toFixed(2)}ms)`}
+                              </Text>
+                              <div className={styles.toolDetails}>
+                                {tool.arguments && (
+                                  <div className={styles.toolArguments}>
+                                    <Text className={styles.toolLabel}>Arguments:</Text>
+                                    <div className={styles.toolOutput}>
+                                      {typeof tool.arguments === 'string' 
+                                        ? tool.arguments
+                                        : JSON.stringify(tool.arguments, null, 2)
+                                      }
+                                    </div>
+                                  </div>
+                                )}
+                                {tool.result && (
+                                  <div className={styles.toolResult}>
+                                    <Text className={styles.toolLabel}>Result:</Text>
+                                    <div className={styles.toolOutput}>
+                                      {typeof tool.result === 'string' 
+                                        ? tool.result.substring(0, 200) + (tool.result.length > 200 ? '...' : '')
+                                        : JSON.stringify(tool.result).substring(0, 200) + '...'
+                                      }
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      <div className={styles.agentResponse}>
+                        <Text className={styles.sectionLabel}>Response:</Text>
+                        <div className={styles.responseText}>
+                          {interaction.output.substring(0, 300)}
+                          {interaction.output.length > 300 && '...'}
+                        </div>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className={styles.codeBlock}>
+                  {JSON.stringify(trace.output, null, 2)}
+                </div>
+              )}
             </div>
           )}
 

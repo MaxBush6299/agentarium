@@ -35,6 +35,11 @@ from agent_framework import (
     ChatMessage,
     Role,
 )
+from agent_framework.observability import setup_observability, OBSERVABILITY_SETTINGS
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
 from src.agents.workflows.base_orchestrator import BaseWorkflowOrchestrator
 from src.agents.workflows.workflow_models import WorkflowTraceMetadata
@@ -64,12 +69,46 @@ class SequentialOrchestrator(BaseWorkflowOrchestrator):
         super().__init__(workflow_id, workflow_config, chat_client)
         self.workflow: Optional[Any] = None
         self.agents_cache: Dict[str, Any] = {}
+        self.span_exporter: Optional[InMemorySpanExporter] = None
+        self.tracer_provider: Optional[TracerProvider] = None
         
         # Required agents for sequential flow
         self.required_agents = [
             "data-agent",       # Retrieves data from database
             "analyst",          # Analyzes retrieved data
         ]
+        
+        # Initialize observability for tool call capture
+        self._setup_observability()
+    
+    def _setup_observability(self) -> None:
+        """
+        Set up OpenTelemetry observability to capture tool calls.
+        
+        Tool calls are automatically traced by agent-framework when observability is enabled.
+        We set up an in-memory span exporter to capture these traces for later extraction.
+        """
+        try:
+            # Enable observability in agent-framework
+            OBSERVABILITY_SETTINGS.enable_otel = True
+            OBSERVABILITY_SETTINGS.enable_sensitive_data = True  # Capture tool arguments/results
+            
+            # Create in-memory span exporter to capture traces
+            self.span_exporter = InMemorySpanExporter()
+            
+            # Create tracer provider with our exporter
+            self.tracer_provider = TracerProvider()
+            self.tracer_provider.add_span_processor(SimpleSpanProcessor(self.span_exporter))
+            
+            # Set as global tracer provider
+            trace.set_tracer_provider(self.tracer_provider)
+            
+            logger.info("✓ Observability enabled for tool call capture")
+            
+        except Exception as e:
+            logger.warning(f"Failed to setup observability: {e}. Tool calls will not be captured.")
+            self.span_exporter = None
+            self.tracer_provider = None
     
     def _load_agents_from_cosmos(self) -> Dict[str, Any]:
         """
@@ -317,8 +356,14 @@ class SequentialOrchestrator(BaseWorkflowOrchestrator):
             
             logger.info(f"Received {len(events)} total events from workflow run")
             
-            # Step 4: Extract final response from events
-            logger.info("Step 4: Extracting final response...")
+            # Step 4: Extract agent interactions from events for detailed traces
+            logger.info("Step 4a: Extracting agent interactions for traces...")
+            print(f"🔍 ABOUT TO EXTRACT AGENT INTERACTIONS FROM {len(events)} EVENTS")
+            self._extract_agent_interactions(events, message)
+            print(f"🔍 FINISHED EXTRACTING INTERACTIONS: {len(self.interactions)} found")
+            
+            # Step 4b: Extract final response from events
+            logger.info("Step 4b: Extracting final response...")
             final_response = await self._extract_final_response(events)
             
             logger.info(f"✓ Extracted response: {final_response[:60]}...")
@@ -334,12 +379,141 @@ class SequentialOrchestrator(BaseWorkflowOrchestrator):
                 thread_id=thread_id,
             )
             
+            # Debug: Log metadata to verify tool calls are included
+            logger.info(f"✓ Built trace metadata with {len(metadata.agent_interactions)} interactions")
+            for interaction in metadata.agent_interactions:
+                logger.info(f"  - {interaction.agent_id}: {len(interaction.tool_calls)} tool calls")
+                if interaction.tool_calls:
+                    for tc in interaction.tool_calls:
+                        logger.info(f"    * {tc.get('name')}: args={tc.get('arguments', 'N/A')[:50]}")
+            
             logger.info("✓ Sequential workflow execution completed successfully")
             return final_response, metadata
             
         except Exception as e:
             logger.error(f"Sequential workflow execution failed: {e}", exc_info=True)
             raise
+    
+    def _extract_tool_calls_from_traces(self, agent_id: str) -> List[Dict[str, Any]]:
+        """
+        Extract tool calls for a specific agent from OpenTelemetry traces.
+        
+        Tool calls are automatically captured by agent-framework's observability system
+        as separate spans with 'gen_ai.operation.name' = 'execute_tool'.
+        
+        NOTE: This method extracts and CLEARS spans, so each agent only gets the tool
+        calls that occurred during its execution. Call this immediately after each
+        agent completes.
+        
+        Args:
+            agent_id: The agent ID to find tool calls for
+            
+        Returns:
+            List of tool call dictionaries with name, arguments, result, duration
+        """
+        if not self.span_exporter:
+            logger.debug("No span exporter available - tool calls not captured")
+            return []
+        
+        tool_calls = []
+        
+        try:
+            # Get all finished spans from the exporter
+            spans = self.span_exporter.get_finished_spans()
+            
+            logger.debug(f"Checking {len(spans)} spans for tool calls from {agent_id}")
+            
+            for span in spans:
+                # Look for tool execution spans
+                # These have gen_ai.operation.name = 'execute_tool'
+                attrs = span.attributes or {}
+                
+                operation_name = attrs.get('gen_ai.operation.name')
+                if operation_name == 'execute_tool':
+                    # This is a tool execution span
+                    tool_name = attrs.get('gen_ai.tool.name', 'unknown')
+                    tool_call_id = attrs.get('gen_ai.tool.call.id', 'unknown')
+                    # Note: The attribute is gen_ai.tool.call.arguments, not gen_ai.tool.arguments
+                    tool_args = attrs.get('gen_ai.tool.call.arguments', '{}')
+                    
+                    # Try multiple possible attribute names for the result
+                    tool_result_raw = (
+                        attrs.get('gen_ai.tool.call.result') or
+                        attrs.get('gen_ai.tool.result') or
+                        attrs.get('tool.result') or
+                        attrs.get('function.result')
+                    )
+                    
+                    # Debug: Log all attributes to see what's available
+                    if tool_name == 'read_data':
+                        logger.info(f"🔍 read_data span attributes: {list(attrs.keys())}")
+                        for key, value in attrs.items():
+                            if 'result' in key.lower() or 'output' in key.lower():
+                                logger.info(f"  🔍 {key}: {str(value)[:200]}")
+                        
+                        # Also check span events
+                        if hasattr(span, 'events') and span.events:
+                            logger.info(f"🔍 read_data span has {len(span.events)} events")
+                            for event in span.events:
+                                logger.info(f"  🔍 Event: {event.name}")
+                                if hasattr(event, 'attributes') and event.attributes:
+                                    for k, v in event.attributes.items():
+                                        logger.info(f"    🔍 {k}: {str(v)[:200]}")
+                    
+                    tool_duration_attr = attrs.get('agent_framework.function.invocation.duration', 0)
+                    
+                    # Convert tool result to a serializable string representation
+                    tool_result = None
+                    if tool_result_raw is not None:
+                        try:
+                            # Check if it's already marked as non-serializable
+                            if isinstance(tool_result_raw, str) and 'non-serializable' in tool_result_raw.lower():
+                                tool_result = None  # Don't show the placeholder
+                            else:
+                                # Try to convert to string with length limit
+                                result_str = str(tool_result_raw)
+                                # Limit to 500 characters for display
+                                if len(result_str) > 500:
+                                    tool_result = result_str[:500] + '... (truncated)'
+                                else:
+                                    tool_result = result_str
+                        except Exception:
+                            tool_result = None
+                    
+                    # Use the duration from attributes if available, otherwise calculate from span times
+                    try:
+                        # The attribute value should be a float (seconds)
+                        tool_duration_seconds = float(tool_duration_attr) if tool_duration_attr else 0  # type: ignore
+                        if tool_duration_seconds > 0:
+                            duration_ms = tool_duration_seconds * 1000  # Convert seconds to milliseconds
+                        else:
+                            duration_ns = 0
+                            if span.end_time and span.start_time:
+                                duration_ns = span.end_time - span.start_time
+                            duration_ms = float(duration_ns) / 1_000_000
+                    except (ValueError, TypeError):
+                        duration_ms = 0.0
+                    
+                    tool_call = {
+                        'id': tool_call_id,
+                        'name': tool_name,
+                        'arguments': tool_args,
+                        'result': tool_result,
+                        'duration_ms': round(duration_ms, 2)
+                    }
+                    
+                    tool_calls.append(tool_call)
+                    logger.debug(f"Found tool call: {tool_name} (duration: {duration_ms:.2f}ms)")
+            
+            # Clear the spans after extraction so the next agent doesn't see these tool calls
+            self.span_exporter.clear()
+            
+            logger.info(f"Extracted {len(tool_calls)} tool calls for {agent_id}, cleared spans")
+            
+        except Exception as e:
+            logger.warning(f"Error extracting tool calls from traces: {e}", exc_info=True)
+        
+        return tool_calls
     
     async def _execute_sequence(
         self,
@@ -363,9 +537,141 @@ class SequentialOrchestrator(BaseWorkflowOrchestrator):
         
         for agent_id in agents:
             logger.info(f"Pipeline step: {agent_id}")
+            path.append(agent_id)
             # TODO: Invoke agent_id with current_output
             # TODO: Capture response
             # TODO: Set current_output = response
-            path.append(agent_id)
         
         return current_output, path
+    
+    def _extract_agent_interactions(self, events: List[Any], initial_message: str) -> None:
+        """
+        Extract agent interactions from workflow events for detailed trace display.
+        
+        Parses workflow events to identify individual agent calls, their inputs/outputs,
+        tool calls, and timing information. Populates self.interactions for trace metadata.
+        
+        Args:
+            events: List of workflow events from SequentialBuilder execution
+            initial_message: The original user message that started the workflow
+        """
+        from src.agents.workflows.workflow_models import AgentInteraction
+        
+        logger.info(f"Processing {len(events)} workflow events to extract agent interactions...")
+        
+        current_agent = None
+        current_input = initial_message
+        current_tool_calls = []
+        interaction_start_time = 0
+        agent_messages = []  # Collect streaming messages for each agent
+        
+        for i, event in enumerate(events):
+            event_type = type(event).__name__
+            
+            # Track agent execution boundaries
+            if event_type == 'ExecutorInvokedEvent' and hasattr(event, 'executor_id'):
+                executor_id = str(event.executor_id)
+                # Filter out non-agent executors
+                if not executor_id.startswith('to-conversation:') and executor_id not in ['input-conversation', 'end']:
+                    if current_agent is not None and agent_messages:
+                        # Save previous agent's interaction
+                        self._save_agent_interaction(current_agent, current_input, agent_messages, current_tool_calls, interaction_start_time, i)
+                        agent_messages = []
+                        current_tool_calls = []
+                    
+                    current_agent = executor_id
+                    interaction_start_time = i
+                    logger.info(f"Started tracking agent: {executor_id}")
+            
+            # Collect agent streaming messages
+            elif event_type == 'AgentRunUpdateEvent' and hasattr(event, 'executor_id') and hasattr(event, 'data'):
+                executor_id = str(event.executor_id)
+                data_obj = getattr(event, 'data', '')
+                message_content = str(data_obj)
+                
+                if current_agent and executor_id == current_agent:
+                    # Collect ALL message parts, including empty ones (they're part of the streaming)
+                    agent_messages.append(message_content)
+            
+            # Capture tool call events (these are rare with agent-framework, as tools are traced via OpenTelemetry)
+            elif 'ToolCall' in event_type or 'Tool' in event_type and 'Call' in event_type:
+                if current_agent and hasattr(event, 'data'):
+                    tool_data = event.data
+                    tool_call = {
+                        'name': getattr(tool_data, 'name', None) or getattr(tool_data, 'tool_name', 'unknown_tool'),
+                        'input': getattr(tool_data, 'arguments', None) or getattr(tool_data, 'parameters', {}),
+                        'output': None,  # Will be filled by tool response
+                        'timestamp': getattr(event, 'timestamp', i)
+                    }
+                    current_tool_calls.append(tool_call)
+            
+            # Capture tool response events  
+            elif 'ToolResponse' in event_type or ('Tool' in event_type and 'Response' in event_type):
+                if current_agent and current_tool_calls and hasattr(event, 'data'):
+                    tool_response = event.data
+                    # Match this response to the last tool call
+                    if current_tool_calls:
+                        response_content = getattr(tool_response, 'content', None) or getattr(tool_response, 'result', str(tool_response))
+                        current_tool_calls[-1]['output'] = response_content
+            
+            # Handle agent completion
+            elif event_type == 'ExecutorCompletedEvent' and hasattr(event, 'executor_id'):
+                executor_id = str(event.executor_id)
+                if current_agent == executor_id and current_agent is not None:
+                    if agent_messages:
+                        # Save the completed agent's interaction
+                        self._save_agent_interaction(current_agent, current_input, agent_messages, current_tool_calls, interaction_start_time, i)
+                        
+                        # The full agent output becomes input for next agent
+                        full_output = ''.join(agent_messages).strip()
+                        if full_output:
+                            current_input = full_output
+                    
+                    agent_messages = []
+                    current_tool_calls = []
+        
+        # Handle any remaining agent interaction
+        if current_agent is not None and agent_messages:
+            self._save_agent_interaction(current_agent, current_input, agent_messages, current_tool_calls, interaction_start_time, len(events))
+        
+        logger.info(f"✓ Extracted {len(self.interactions)} agent interactions for trace display")
+    
+    def _save_agent_interaction(self, agent_id: str, input_text: str, message_parts: List[str], tool_calls: List[dict], start_time: int, end_time: int) -> None:
+        """Save an agent interaction from collected message parts."""
+        from src.agents.workflows.workflow_models import AgentInteraction
+        
+        # Combine all message parts to get the full output
+        full_output = ''.join(message_parts).strip()
+        
+        if not full_output or len(full_output) < 5:  # Skip empty or very short outputs
+            print(f"🔍 SKIPPING INTERACTION: {agent_id} - output too short ({len(full_output)} chars)")
+            return
+        
+        # Calculate execution time (rough estimate)
+        execution_time = (end_time - start_time) * 100  # Fallback timing
+        
+        # Extract tool calls from OpenTelemetry traces
+        # This captures the actual tool executions that were traced by agent-framework
+        extracted_tool_calls = self._extract_tool_calls_from_traces(agent_id)
+        
+        # Use extracted tool calls if available, otherwise fall back to tool_calls parameter
+        final_tool_calls = extracted_tool_calls if extracted_tool_calls else (tool_calls.copy() if tool_calls else [])
+        
+        # Debug: Log the tool calls structure
+        print(f"🔍 TOOL CALLS FOR {agent_id}:")
+        for idx, tc in enumerate(final_tool_calls):
+            print(f"🔍   [{idx}] Type: {type(tc)}, Keys: {tc.keys() if isinstance(tc, dict) else 'N/A'}")
+            print(f"🔍       Data: {tc}")
+        
+        # Create agent interaction
+        interaction = AgentInteraction(
+            agent_id=agent_id,
+            input=input_text,
+            output=full_output,
+            tool_calls=final_tool_calls,
+            execution_time_ms=execution_time
+        )
+        
+        self.interactions.append(interaction)
+        print(f"🔍 SAVED INTERACTION: {agent_id} - {len(full_output)} chars, {len(final_tool_calls)} tool calls, input: {input_text[:50]}...")
+        logger.info(f"✓ Captured interaction for {agent_id}: {len(full_output)} chars, {len(final_tool_calls)} tool calls")

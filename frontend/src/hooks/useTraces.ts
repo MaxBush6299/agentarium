@@ -40,7 +40,7 @@ export const useTraces = (): UseTracesReturn => {
 
     if (eventType === 'trace_start') {
       // New trace started
-      const stepId = (event.step_id as string) || `trace_${Date.now()}`
+      const stepId = (event.step_id as string) || `trace_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       const newTrace: TraceEvent = {
         id: stepId,
         type: 'tool_call',
@@ -88,12 +88,30 @@ export const useTraces = (): UseTracesReturn => {
       const stepId = event.step_id as string
       const trace = traceMapRef.current.get(stepId)
 
+      console.log('🔧 trace_end processing:', {
+        stepId,
+        traceFound: !!trace,
+        hasEventOutput: !!event.output,
+        eventOutput: event.output,
+        eventOutputKeys: event.output ? Object.keys(event.output as any) : [],
+        hasAgentInteractions: !!(event.output as any)?.agent_interactions,
+        eventKeys: Object.keys(event)
+      });
+
       if (trace) {
         trace.status = (event.status as 'success' | 'error') || 'success'
         trace.endTime = Date.now()
         trace.latencyMs = (event.latency_ms as number) || (trace.endTime - trace.startTime)
         trace.output = (event.output as Record<string, unknown>) || undefined
         trace.error = (event.error as string) || undefined
+        
+        console.log('🔧 trace updated with output:', {
+          traceId: trace.id,
+          hasOutput: !!trace.output,
+          outputKeys: trace.output ? Object.keys(trace.output) : [],
+          hasAgentInteractions: !!trace.output?.agent_interactions,
+          agentInteractionsValue: trace.output?.agent_interactions
+        });
 
         // Add token info if present
         if (event.tokens_input || event.tokens_output || event.tokens_total) {

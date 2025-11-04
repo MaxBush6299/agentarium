@@ -248,6 +248,39 @@ export const streamChat = async (
             continue
           }
           
+          // Handle metadata events from workflows (sequential, handoff)
+          if (eventType === 'metadata') {
+            // Convert workflow metadata to a trace event for display in trace panel
+            const traceEvent = {
+              type: 'trace_end',
+              tool_name: parsed.pattern || `${parsed.workflow_type} workflow`,
+              step_id: parsed.workflow_id || 'workflow',
+              status: 'success',
+              metadata: parsed,
+              latency_ms: 0,
+              output: {
+                workflow_id: parsed.workflow_id,
+                workflow_type: parsed.workflow_type,
+                pattern: parsed.pattern,
+                execution_path: parsed.execution_path || parsed.handoff_path,
+              },
+            }
+            
+            // First send a trace_start event
+            if (traceEventCallback) {
+              traceEventCallback({
+                type: 'trace_start',
+                tool_name: traceEvent.tool_name,
+                step_id: traceEvent.step_id,
+                tool_type: 'workflow',
+              })
+              // Then send the trace_end event
+              traceEventCallback(traceEvent)
+            }
+            console.debug('Received workflow metadata:', parsed.workflow_type)
+            continue
+          }
+          
           // Handle different event types from backend
           // Match the actual SSE events from the backend streaming:
           if (parsed.type === 'token' && parsed.content) {

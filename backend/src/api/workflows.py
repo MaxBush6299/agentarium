@@ -151,6 +151,11 @@ async def execute_workflow(
     TODO: Implement workflow execution
     Current: Placeholder returning mock response
     """
+    logger.info("=" * 80)
+    logger.info(f"🚀 EXECUTE_WORKFLOW CALLED: workflow_id={workflow_id}")
+    logger.info(f"Request: {request}")
+    logger.info("=" * 80)
+    
     if request is None:
         raise HTTPException(status_code=400, detail="Request body required")
     
@@ -177,8 +182,22 @@ async def execute_workflow(
                 yield f"event: status\ndata: {json.dumps({'status': 'workflow_starting', 'workflow_id': workflow_id})}\n\n"
                 await asyncio.sleep(0.1)
                 
-                # Execute based on workflow type
+                # Emit trace_start event to show trace panel immediately
                 workflow_type = workflow_config.get('type', '')
+                import time
+                # Generate step_id once and reuse for trace_end
+                workflow_step_id = f"{workflow_id}_{int(time.time() * 1000)}"
+                trace_start_data = {
+                    'type': 'trace_start',
+                    'tool_name': f'{workflow_type.title()} Workflow',
+                    'step_id': workflow_step_id,
+                    'tool_type': 'workflow',
+                    'workflow_id': workflow_id
+                }
+                yield f"data: {json.dumps(trace_start_data)}\n\n"
+                await asyncio.sleep(0.1)
+                
+                # Execute based on workflow type
                 
                 if workflow_type == 'handoff':
                     # Import and execute handoff orchestrator
@@ -203,7 +222,30 @@ async def execute_workflow(
                     yield f"event: message\ndata: {json.dumps({'message': final_response})}\n\n"
                     await asyncio.sleep(0.1)
                     
-                    # Metadata event with trace
+                    # Emit trace_end event with rich agent interaction data
+                    trace_end_data = {
+                        'type': 'trace_end',
+                        'tool_name': f'{workflow_type.title()} Workflow',
+                        'step_id': workflow_id,
+                        'status': 'success',
+                        'latency_ms': 0,
+                        'output': {
+                            'workflow_id': workflow_id,
+                            'handoff_path': trace_metadata.handoff_path,
+                            'total_handoffs': trace_metadata.total_handoffs,
+                            'final_satisfaction_score': trace_metadata.final_satisfaction_score,
+                            'final_evaluator_reasoning': trace_metadata.final_evaluator_reasoning,
+                            'max_attempts_reached': trace_metadata.max_attempts_reached,
+                            'agent_interactions': [
+                                serialize_for_json(interaction) 
+                                for interaction in trace_metadata.agent_interactions
+                            ] if hasattr(trace_metadata, 'agent_interactions') else [],
+                        }
+                    }
+                    yield f"data: {json.dumps(trace_end_data)}\n\n"
+                    await asyncio.sleep(0.1)
+                    
+                    # Metadata event with trace (keep for backward compatibility)
                     metadata_dict = {
                         'workflow_id': workflow_id,
                         'thread_id': thread_id,
@@ -239,8 +281,10 @@ async def execute_workflow(
                             message=request.message,
                             thread_id=thread_id
                         )
+                        logger.info(f"✅ Sequential workflow execution completed successfully")
                     except Exception as e:
-                        logger.error(f"Sequential workflow execution error: {e}", exc_info=True)
+                        logger.error(f"❌ Sequential workflow execution error: {e}", exc_info=True)
+                        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
                         raise
                     
                     logger.info(f"Sequential workflow complete: response_length={len(final_response)}")
@@ -248,8 +292,50 @@ async def execute_workflow(
                     # Message event with final response
                     yield f"event: message\ndata: {json.dumps({'message': final_response})}\n\n"
                     await asyncio.sleep(0.1)
+                    logger.info("✅ Sent message event")
                     
-                    # Metadata event with trace
+                    # Emit trace_end event with rich agent interaction data
+                    trace_end_data = {
+                        'type': 'trace_end',
+                        'tool_name': f'{workflow_type.title()} Workflow',
+                        'step_id': workflow_step_id,  # Use same step_id as trace_start
+                        'status': 'success',
+                        'latency_ms': 0,
+                        'output': {
+                            'workflow_id': workflow_id,
+                            'workflow_type': workflow_type,
+                            'pattern': 'Sequential Pipeline', 
+                            'execution_path': 'data-agent → analyst',
+                            'agent_interactions': [
+                                serialize_for_json(interaction) 
+                                for interaction in trace_metadata.agent_interactions
+                            ] if hasattr(trace_metadata, 'agent_interactions') else [],
+                            'handoff_path': getattr(trace_metadata, 'handoff_path', []),
+                            'total_handoffs': getattr(trace_metadata, 'total_handoffs', 0),
+                        }
+                    }
+                    
+                    # Debug: Log serialized agent interactions
+                    if hasattr(trace_metadata, 'agent_interactions'):
+                        logger.info(f"📤 About to serialize {len(trace_metadata.agent_interactions)} interactions")
+                        for interaction in trace_metadata.agent_interactions:
+                            serialized = serialize_for_json(interaction)
+                            logger.info(f"📤 Serialized interaction: agent={interaction.agent_id}, tool_calls={len(interaction.tool_calls)}")
+                            logger.info(f"📤   Tool calls in serialized: {serialized.get('tool_calls', [])}")
+                    
+                    # Debug: Show the full trace_end_data being sent
+                    trace_json = json.dumps(trace_end_data)
+                    logger.info(f"📤 FULL TRACE DATA LENGTH: {len(trace_json)} chars")
+                    if 'agent_interactions' in trace_json:
+                        logger.info(f"📤 agent_interactions found in JSON")
+                    if 'tool_calls' in trace_json:
+                        logger.info(f"📤 tool_calls found in JSON")
+                    
+                    yield f"data: {trace_json}\n\n"
+                    await asyncio.sleep(0.1)
+                    logger.info("✅ Sent trace_end event")
+                    
+                    # Metadata event with trace (keep for backward compatibility)
                     metadata_dict = {
                         'workflow_id': workflow_id,
                         'thread_id': thread_id,
@@ -259,6 +345,7 @@ async def execute_workflow(
                     }
                     yield f"event: metadata\ndata: {json.dumps(metadata_dict)}\n\n"
                     await asyncio.sleep(0.1)
+                    logger.info("✅ Sent metadata event")
                     
                     logger.info("Sequential workflow events sent, proceeding to done event...")
                 
@@ -374,11 +461,45 @@ async def execute_workflow(
                         logger.error(f"RFQ workflow execution error: {e}", exc_info=True)
                         raise
                     
+                    # Emit trace_end event for RFQ workflow
+                    trace_end_data = {
+                        'type': 'trace_end',
+                        'tool_name': f'{workflow_type.upper()} Workflow',
+                        'step_id': workflow_id,
+                        'status': 'success',
+                        'latency_ms': 0,
+                        'output': {
+                            'workflow_id': workflow_id,
+                            'workflow_type': workflow_type,
+                            'pattern': 'RFQ Procurement Pipeline',
+                            'execution_path': 'requirement → sourcing → qualification → negotiation → selection → contracting → finalization',
+                        }
+                    }
+                    yield f"data: {json.dumps(trace_end_data)}\n\n"
+                    await asyncio.sleep(0.1)
+                    logger.info("✅ Sent RFQ trace_end event")
+                    
                     logger.info(f"RFQ workflow streaming complete")
                 
                 else:
                     # Unknown workflow type
                     yield f"event: message\ndata: {json.dumps({'message': f'Workflow type {workflow_type} not yet implemented'})}\n\n"
+                    
+                    # Emit trace_end event for unknown workflow
+                    trace_end_data = {
+                        'type': 'trace_end',
+                        'tool_name': f'{workflow_type.title()} Workflow',
+                        'step_id': workflow_id,
+                        'status': 'error',
+                        'latency_ms': 0,
+                        'output': {
+                            'workflow_id': workflow_id,
+                            'workflow_type': workflow_type,
+                            'error': f'Workflow type {workflow_type} not yet implemented',
+                        }
+                    }
+                    yield f"data: {json.dumps(trace_end_data)}\n\n"
+                    await asyncio.sleep(0.1)
                 
                 logger.info(f"Workflow {workflow_id} complete, sending done event...")
                 yield f"event: done\ndata: {json.dumps({'complete': True})}\n\n"
@@ -386,6 +507,22 @@ async def execute_workflow(
             
             except Exception as e:
                 logger.error(f"Error in workflow event generator: {str(e)}", exc_info=True)
+                
+                # Emit trace_end event with error status
+                trace_end_error = {
+                    'type': 'trace_end',
+                    'tool_name': f'{workflow_config.get("type", "Unknown").title()} Workflow',
+                    'step_id': workflow_id,
+                    'status': 'error',
+                    'latency_ms': 0,
+                    'output': {
+                        'workflow_id': workflow_id,
+                        'error': str(e),
+                    }
+                }
+                yield f"data: {json.dumps(trace_end_error)}\n\n"
+                await asyncio.sleep(0.1)
+                
                 yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
                 yield f"event: done\ndata: {json.dumps({'complete': False})}\n\n"
         

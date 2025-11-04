@@ -9,7 +9,6 @@ import {
 import { MessageBubble } from './MessageBubble';
 import { TracePanel } from './TracePanel';
 import type { MessageListProps } from '../../types/message';
-import { MessageRole } from '../../types/message';
 
 const useStyles = makeStyles({
   container: {
@@ -91,19 +90,26 @@ export const MessageList: React.FC<MessageListProps> = ({
   return (
     <div className={styles.container}>
       <div className={styles.messageList} ref={messageListRef}>
-        {messages.map((message, index) => (
-          <React.Fragment key={message.id}>
-            <MessageBubble message={message} />
-            {/* Show traces after user message and before assistant response */}
-            {message.role === MessageRole.USER &&
-              traces.length > 0 &&
-              messages[index + 1]?.role === MessageRole.ASSISTANT && (
+        {messages.map((message, index) => {
+          // Find the last user message in the conversation
+          const lastUserMessageIndex = messages.map((msg, i) => msg.role === 'user' ? i : -1)
+            .filter(i => i !== -1)
+            .pop() ?? -1;
+          
+          const shouldShowTracesAfterThis = traces.length > 0 && index === lastUserMessageIndex;
+          
+          return (
+            <React.Fragment key={message.id}>
+              <MessageBubble message={message} />
+              {/* Show trace panel after the last user message if traces exist */}
+              {shouldShowTracesAfterThis && (
                 <div style={{ padding: '12px' }}>
                   <TracePanel traces={traces} isStreaming={isLoading} />
                 </div>
               )}
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          );
+        })}
         {isLoading && (
           <div className={styles.loadingContainer}>
             <Spinner size="small" />

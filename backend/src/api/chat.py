@@ -128,6 +128,11 @@ async def chat_with_agent(
     Returns:
         StreamingResponse with SSE events or JSON response
     """
+    logger.info("=" * 80)
+    logger.info(f"🎯 CHAT_WITH_AGENT CALLED: agent_id={agent_id}")
+    logger.info(f"Request: {request}")
+    logger.info("=" * 80)
+    
     logger.info(f"Chat request for agent {agent_id}: {request.message[:50]}...")
     
     try:
@@ -212,8 +217,11 @@ async def chat_with_agent(
         if request.thread_id:
             thread = await thread_repo.get(request.thread_id, agent_id)
             if not thread:
-                raise HTTPException(status_code=404, detail=f"Thread {request.thread_id} not found")
-            if thread.agent_id != agent_id:
+                # Thread doesn't exist - create a new one
+                logger.info(f"Thread {request.thread_id} not found, creating new thread for agent {agent_id}")
+                thread = await thread_repo.create(agent_id=agent_id)
+                logger.info(f"Created new thread {thread.id}")
+            elif thread.agent_id != agent_id:
                 raise HTTPException(status_code=400, detail="Thread belongs to different agent")
         else:
             # Create new thread

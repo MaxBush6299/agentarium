@@ -7,7 +7,7 @@ Version: 1.0.1
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -155,6 +155,11 @@ app.include_router(a2a_router)  # A2A endpoints at /a2a
 app.include_router(agent_cards_router)  # Agent card management API at /api/agent-cards
 logger.info("A2A Protocol routers registered")
 
+# Include Workflows API Router FIRST (more specific routes)
+from src.api.workflows import router as workflows_router
+app.include_router(workflows_router)  # Workflows API at /api/workflows
+logger.info("Workflows API router registered")
+
 # Include Chat API Router
 from src.api.chat import router as chat_router
 app.include_router(chat_router)  # Chat API at /api/agents/{agent_id}/...
@@ -174,11 +179,6 @@ logger.info("Custom Tools API router registered")
 from src.api.models import router as models_router
 app.include_router(models_router)  # Models API at /api/models
 logger.info("Models API router registered")
-
-# Include Workflows API Router
-from src.api.workflows import router as workflows_router
-app.include_router(workflows_router)  # Workflows API at /api/workflows
-logger.info("Workflows API router registered")
 
 
 # Health Check Endpoint

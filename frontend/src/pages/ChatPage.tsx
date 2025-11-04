@@ -116,7 +116,7 @@ export const ChatPage = () => {
   // Chat state
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const { traces, clearTraces } = useTraces()
+  const { traces, clearTraces, addTraceEvent } = useTraces()
 
   // Load thread data on mount
   useEffect(() => {
@@ -363,6 +363,19 @@ export const ChatPage = () => {
         } else {
           // Handle trace events (optional for workflows)
           console.debug('Trace event:', event)
+          
+          // Add trace event to traces state if it's a valid trace event
+          // Filter out agent-framework traces that don't have workflow_id
+          if (event.type && ['trace_start', 'trace_update', 'trace_end'].includes(event.type as string)) {
+            // Only add traces that have workflow_id (our custom traces)
+            // This filters out agent-framework's internal traces
+            if (event.workflow_id || (event.type === 'trace_end' && event.output)) {
+              addTraceEvent({
+                ...event,
+                timestamp: new Date().toISOString(),
+              } as any)
+            }
+          }
         }
       },
       (fullMessage: string) => {
