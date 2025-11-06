@@ -42,12 +42,21 @@ export interface Message {
   agentName?: string;
   isStreaming?: boolean;
   error?: string;
-  humanGateActions?: Array<'approve' | 'edit' | 'reject'>;
+  humanGateActions?: Array<{ action: string; label: string; style?: string }>;
   humanGateData?: any;
   metadata?: {
     phase?: string;
     isPhaseMessage?: boolean;
     data?: Record<string, unknown>;
+    title?: string;
+    metrics?: {
+      duration_ms: number;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      estimated?: boolean;
+    };
+    subBlocks?: Array<{ id: string; title: string; markdown: string }>;
     [key: string]: any;
   };
 }

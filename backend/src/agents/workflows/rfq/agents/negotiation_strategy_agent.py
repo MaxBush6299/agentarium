@@ -142,6 +142,12 @@ Focus on win-win outcomes that strengthen long-term supplier relationships while
         target_price = strategy_analysis.get("suggested_unit_price", top_quote.unit_price * 0.95)
         cost_savings = (top_quote.unit_price - target_price) * quantity
         
+        # Extract fallback options - handle both string list and dict list formats
+        fallback_opts = strategy_analysis.get("fallback_options", [])
+        if fallback_opts and isinstance(fallback_opts[0], dict):
+            # If LLM returned dicts with 'option' key, extract the strings
+            fallback_opts = [opt.get("option", str(opt)) for opt in fallback_opts]
+        
         # Create comprehensive recommendation
         recommendation = NegotiationRecommendation(
             recommendation_id=f"nego-{uuid.uuid4().hex[:8]}",
@@ -159,7 +165,7 @@ Focus on win-win outcomes that strengthen long-term supplier relationships while
                 "expected_outcome",
                 f"Target: ${target_price:.2f}/unit, Potential savings: ${cost_savings:,.2f}"
             ),
-            fallback_options=strategy_analysis.get("fallback_options", []),
+            fallback_options=fallback_opts,
             estimated_cost_savings=max(0, cost_savings),
             notes=strategy_analysis.get(
                 "notes",

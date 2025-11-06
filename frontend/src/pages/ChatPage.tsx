@@ -177,6 +177,42 @@ export const ChatPage = () => {
     return () => clearTimeout(timer)
   }, [currentAgentId, threadId, navigate])
 
+  // Listen for custom rfq-phase events (Phase 7 resume injection)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent
+      const detail = ce.detail || {}
+      if (detail.type === 'agent_section' && detail.phase === 'phase7_complete') {
+        const phaseMessageId = `${Date.now()}_${detail.phase}`
+        const newPhaseMessage: Message = {
+          id: phaseMessageId,
+          role: MessageRole.ASSISTANT,
+          content: detail.markdown || '',
+          timestamp: new Date(),
+          agentId: currentAgentId,
+          isStreaming: false,
+          metadata: {
+            phase: detail.phase,
+            title: detail.title || 'Phase 7: Purchase Order',
+            isPhaseMessage: true,
+            data: detail.data || {},
+            metrics: detail.metrics || {
+              duration_ms: 0,
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+              estimated: true,
+            },
+            subBlocks: detail.subBlocks || [],
+          },
+        }
+        setMessages(prev => [...prev, newPhaseMessage])
+      }
+    }
+    window.addEventListener('rfq-phase', handler)
+    return () => window.removeEventListener('rfq-phase', handler)
+  }, [currentAgentId])
+
   // Handle agent change
   const handleAgentChange = (agentId: string) => {
     setCurrentAgentId(agentId)
@@ -323,10 +359,66 @@ export const ChatPage = () => {
         )
       },
       (event: Record<string, unknown>) => {
-        // Handle phase_complete events for RFQ workflow
+        // Handle structured RFQ phase blocks (agent_section)
+        if (event.type === 'agent_section') {
+          const phaseName = event.phase as string
+          const markdown = event.markdown as string
+          const title = (event.title as string) || phaseName
+          const metrics = event.metrics as any
+          const data = (event.data as Record<string, unknown>) || {}
+          const subBlocks = (event.subBlocks as Array<any>) || []
+
+          // Determine if approval/human gate actions should be shown
+          const isApprovalPhase = phaseName === 'phase6_awaiting' && data.status === 'awaiting_approval'
+
+          const phaseMessageId = `${Date.now()}_${phaseName}`
+          const newPhaseMessage: Message = {
+            id: phaseMessageId,
+            role: MessageRole.ASSISTANT,
+            content: markdown,
+            timestamp: new Date(),
+            agentId: currentAgentId,
+            isStreaming: false,
+            humanGateActions: isApprovalPhase ? ['approve', 'reject'] : undefined,
+            humanGateData: isApprovalPhase ? data.approval_request : undefined,
+            metadata: {
+              phase: phaseName,
+              title,
+              isPhaseMessage: true,
+              data,
+              metrics: metrics || {
+                duration_ms: 0,
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                estimated: true,
+              },
+              subBlocks: subBlocks.map(sb => ({
+                id: sb.id || sb.title?.toLowerCase().replace(/\s+/g, '-'),
+                title: sb.title,
+                markdown: sb.markdown,
+              })),
+            },
+          }
+
+          // Replace placeholder streaming message if still present
+          setMessages(prev => {
+            const hasPlaceholder = prev.some(m => m.id === assistantMessageId && m.content === '')
+            if (hasPlaceholder) {
+              return prev.map(m => m.id === assistantMessageId ? newPhaseMessage : m)
+            }
+            return [...prev, newPhaseMessage]
+          })
+          return
+        }
+        // Handle legacy phase_complete events for RFQ workflow
         if (event.type === 'phase_complete') {
           const phaseMessage = event.message as string
           const phaseName = event.phase as string
+          const eventData = (event.data as Record<string, unknown>) || {}
+          
+          // Check if this is an approval request phase
+          const isApprovalPhase = phaseName === 'phase6_awaiting' && eventData.status === 'awaiting_approval'
           
           // Create a new assistant message for this phase
           const phaseMessageId = `${Date.now()}_${phaseName}`
@@ -337,10 +429,13 @@ export const ChatPage = () => {
             timestamp: new Date(),
             agentId: currentAgentId,
             isStreaming: false,
+            // Add humanGateActions for approval phases
+            humanGateActions: isApprovalPhase ? ['approve', 'reject'] : undefined,
+            humanGateData: isApprovalPhase ? eventData.approval_request : undefined,
             metadata: {
               phase: phaseName,
               isPhaseMessage: true,
-              data: (event.data as Record<string, unknown>) || {},
+              data: eventData,
             },
           }
           

@@ -158,6 +158,50 @@ const useStyles = makeStyles({
   phaseContentCollapsed: {
     display: 'none',
   },
+  approvalContainer: {
+    ...shorthands.margin(tokens.spacingVerticalM, 0),
+  },
+  approvalDetails: {
+    ...shorthands.margin(tokens.spacingVerticalS, 0, tokens.spacingVerticalM, 0),
+  },
+  detailsToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    cursor: 'pointer',
+    ...shorthands.padding(tokens.spacingVerticalS),
+    ...shorthands.borderRadius(tokens.borderRadiusSmall),
+    '&:hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  detailsLabel: {
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  detailsContent: {
+    ...shorthands.margin(tokens.spacingVerticalS, 0),
+    ...shorthands.padding(tokens.spacingVerticalM),
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderRadius(tokens.borderRadiusSmall),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  vendorTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    marginTop: tokens.spacingVerticalS,
+  },
+  tableHeader: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    fontWeight: tokens.fontWeightSemibold,
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    textAlign: 'left',
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  tableCell: {
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+  },
 });
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
@@ -167,6 +211,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === MessageRole.USER;
   const isAssistant = message.role === MessageRole.ASSISTANT;
   const isPhaseMessage = message.metadata?.isPhaseMessage === true;
+  const metrics = message.metadata?.metrics;
+  const subBlocks = message.metadata?.subBlocks || [];
 
   const formatTime = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -176,13 +222,69 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     }).format(date);
   };
 
+  const renderApprovalDetails = (approvalData: any) => {
+    if (!approvalData) return null;
+    
+    const comparison = approvalData.comparison_report;
+    const vendors = comparison?.vendors || [];
+    
+    return (
+      <div>
+        <Text weight="semibold" size={400}>Vendor Comparison Details:</Text>
+        {vendors.length > 0 && (
+          <table className={styles.vendorTable}>
+            <thead>
+              <tr>
+                <th className={styles.tableHeader}>Vendor</th>
+                <th className={styles.tableHeader}>Price</th>
+                <th className={styles.tableHeader}>Rating</th>
+                <th className={styles.tableHeader}>Delivery</th>
+                <th className={styles.tableHeader}>Payment Terms</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vendors.map((vendor: any, index: number) => (
+                <tr key={index}>
+                  <td className={styles.tableCell}>{vendor.vendor_name}</td>
+                  <td className={styles.tableCell}>${vendor.quoted_unit_price?.toFixed(2) || 'N/A'}</td>
+                  <td className={styles.tableCell}>{vendor.vendor_rating?.toFixed(1) || 'N/A'}</td>
+                  <td className={styles.tableCell}>
+                    {vendor.estimated_delivery_date ? 
+                      new Date(vendor.estimated_delivery_date).toLocaleDateString() : 'TBD'}
+                  </td>
+                  <td className={styles.tableCell}>{vendor.payment_terms || 'Standard'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {approvalData.negotiation_recommendations && approvalData.negotiation_recommendations.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <Text weight="semibold" size={400}>Negotiation Recommendations:</Text>
+            {approvalData.negotiation_recommendations.map((rec: any, index: number) => (
+              <div key={index} style={{ margin: '8px 0', padding: '8px', backgroundColor: 'rgba(0, 120, 212, 0.1)', borderRadius: '4px' }}>
+                <Text size={300}><strong>Strategy:</strong> {rec.negotiation_strategy}</Text>
+                {rec.suggested_unit_price && (
+                  <Text size={300}><br/><strong>Suggested Price:</strong> ${rec.suggested_unit_price.toFixed(2)}</Text>
+                )}
+                {rec.rationale && (
+                  <Text size={300}><br/><strong>Rationale:</strong> {rec.rationale}</Text>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderAvatar = () => {
     if (isUser) {
       return (
         <Avatar
           className={styles.avatar}
           icon={<Person24Regular />}
-          color="brand"
+          color="colorful"
           aria-label="User"
         />
       );
@@ -202,6 +304,45 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       return 'You';
     }
     return message.agentName || 'Assistant';
+  };
+
+  const renderHumanGateSection = () => {
+    if (!message.humanGateActions || message.humanGateActions.length === 0) {
+      return null;
+    }
+    return (
+      <div className={styles.approvalContainer}>
+        {message.humanGateData && (
+          <div className={styles.approvalDetails}>
+            <div
+              className={styles.detailsToggle}
+              onClick={() => setIsExpanded(!isExpanded)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setIsExpanded(!isExpanded);
+                }
+              }}
+            >
+              {isExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+              <Text className={styles.detailsLabel}>View Details</Text>
+            </div>
+            {isExpanded && (
+              <div className={styles.detailsContent}>
+                {renderApprovalDetails(message.humanGateData)}
+              </div>
+            )}
+          </div>
+        )}
+        <HumanGateActions
+          onAction={(action, result) => {
+            console.log('HumanGate action:', action, result);
+          }}
+          disabled={message.isStreaming}
+        />
+      </div>
+    );
   };
 
   return (
@@ -237,15 +378,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               }}
             >
               {isExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
-              <Text className={styles.phaseTitle}>
-                {message.metadata.phase}
-              </Text>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <Text className={styles.phaseTitle}>
+                  {message.metadata.title || message.metadata.phase}
+                </Text>
+                {metrics && (
+                  <Text size={200} style={{ opacity: 0.75 }}>
+                    {metrics.duration_ms} ms | tokens {metrics.prompt_tokens}/{metrics.completion_tokens}/{metrics.total_tokens}
+                    {metrics.estimated ? ' (est)' : ''}
+                  </Text>
+                )}
+              </div>
             </div>
             <div className={isExpanded ? styles.phaseContent : styles.phaseContentCollapsed}>
               <div className={styles.content}>
+                {subBlocks.length > 1 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    {subBlocks.map(sb => (
+                      <a key={sb.id} href={`#${sb.id}`} style={{ marginRight: '12px', fontSize: '12px' }}>
+                        {sb.title}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <ReactMarkdown>
                   {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
                 </ReactMarkdown>
+                {renderHumanGateSection()}
               </div>
             </div>
           </div>
@@ -259,18 +418,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 {message.isStreaming && (
                   <span className={styles.streamingIndicator} />
                 )}
-                {/* Human Gate UI */}
-                {message.humanGateActions && message.humanGateActions.length > 0 && (
-                  <HumanGateActions
-                    onAction={(action, result) => {
-                      // Optionally handle result, e.g., update UI or show confirmation
-                      // You can trigger a callback to parent here if needed
-                      // For now, just log
-                      console.log('HumanGate action:', action, result)
-                    }}
-                    disabled={message.isStreaming}
-                  />
-                )}
+                {renderHumanGateSection()}
               </>
             ) : (
               <Text>{message.content}</Text>

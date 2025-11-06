@@ -407,7 +407,8 @@ async def execute_workflow(
                     repo = get_thread_repository()
                     
                     try:
-                        existing_thread = await repo.get(thread_id, workflow_id)
+                        # Use stable partition key for RFQ threads
+                        existing_thread = await repo.get(thread_id, "rfq-procurement")
                     except Exception:
                         existing_thread = None
                     
@@ -418,7 +419,7 @@ async def execute_workflow(
                         from src.persistence.models import Thread, Message
                         new_thread = Thread(
                             id=thread_id,
-                            agentId=workflow_id,
+                            agentId="rfq-procurement",
                             workflowId=workflow_id,
                             title=f"RFQ Request {rfq_request.request_id}",
                             messages=[],
@@ -431,7 +432,7 @@ async def execute_workflow(
                         await repo.container.create_item(body=new_thread.model_dump(by_alias=True))
                         logger.info(f"Created thread {thread_id} for workflow {workflow_id}")
                     
-                    orchestrator = RFQWorkflowOrchestrator()
+                    orchestrator = RFQWorkflowOrchestrator(thread_id=thread_id, agent_id="rfq-procurement")
                     
                     # Execute workflow with streaming - yields detailed messages for each phase
                     try:
@@ -440,23 +441,38 @@ async def execute_workflow(
                             workflow_id=workflow_exec_id,
                             buyer_name=rfq_request.requestor_name,
                             buyer_email=rfq_request.requestor_email,
-                            wait_for_human=False,  # Auto-approve (true approval would require workflow persistence)
+                            wait_for_human=True,  # Enable human approval workflow
                         ):
-                            # Send complete phase message as a separate message event
-                            phase_message = phase_result.get("message", "")
-                            phase_name = phase_result.get("phase", "unknown")
-                            phase_data = phase_result.get("data", {})
-                            
-                            # Convert phase_data to JSON-serializable format using helper
-                            try:
-                                serializable_data = serialize_for_json(phase_data) if phase_data else {}
-                            except Exception as serialize_error:
-                                logger.warning(f"Failed to serialize phase_data: {serialize_error}")
-                                serializable_data = {}
-                            
-                            # Send as a complete phase message (not a token/chunk)
-                            yield f"event: phase_complete\ndata: {json.dumps({'phase': phase_name, 'message': phase_message, 'data': serializable_data})}\n\n"
-                            await asyncio.sleep(0.1)
+                            # Handle new structured phase block events
+                            if phase_result.get("type") == "agent_section":
+                                payload = {
+                                    "phase": phase_result.get("phase"),
+                                    "title": phase_result.get("title"),
+                                    "markdown": phase_result.get("markdown"),
+                                    "metrics": phase_result.get("metrics", {}),
+                                    "isPhaseMessage": phase_result.get("isPhaseMessage", True),
+                                    "data": phase_result.get("data", {}),
+                                    "subBlocks": phase_result.get("sub_blocks", []),
+                                }
+                                try:
+                                    payload["data"] = serialize_for_json(payload["data"]) if payload["data"] else {}
+                                except Exception as serialize_error:
+                                    logger.warning(f"Failed to serialize phase data: {serialize_error}")
+                                    payload["data"] = {}
+                                yield f"event: agent_section\ndata: {json.dumps(payload)}\n\n"
+                                await asyncio.sleep(0.05)
+                            else:
+                                # Fallback legacy message path
+                                phase_message = phase_result.get("message", "")
+                                phase_name = phase_result.get("phase", "unknown")
+                                phase_data = phase_result.get("data", {})
+                                try:
+                                    serializable_data = serialize_for_json(phase_data) if phase_data else {}
+                                except Exception as serialize_error:
+                                    logger.warning(f"Failed to serialize phase_data (legacy): {serialize_error}")
+                                    serializable_data = {}
+                                yield f"event: phase_complete\ndata: {json.dumps({'phase': phase_name, 'message': phase_message, 'data': serializable_data})}\n\n"
+                                await asyncio.sleep(0.05)
                     except Exception as e:
                         logger.error(f"RFQ workflow execution error: {e}", exc_info=True)
                         raise

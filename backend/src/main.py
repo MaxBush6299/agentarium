@@ -180,6 +180,14 @@ from src.api.models import router as models_router
 app.include_router(models_router)  # Models API at /api/models
 logger.info("Models API router registered")
 
+# Include Human Gate (Approval) API Router
+try:
+    from src.api.human_gate import router as human_gate_router
+    app.include_router(human_gate_router)  # Human Gate API at /api/human-gate
+    logger.info("Human Gate API router registered")
+except Exception as e:
+    logger.error(f"Failed to register Human Gate router: {e}")
+
 
 # Health Check Endpoint
 @app.get("/health", tags=["Health"])

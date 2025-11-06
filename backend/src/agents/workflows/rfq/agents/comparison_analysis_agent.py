@@ -30,8 +30,23 @@ class ComparisonAndAnalysisAgent(DemoBaseAgent):
     """
     
     def __init__(self):
-        """Initialize comparison agent."""
-        instructions = "You are a vendor comparison analyst. Compare vendors and provide recommendations."
+        """Initialize comparison agent.
+
+        Updated instructions encourage structured markdown output (summary + tables):
+        - Provide a concise 2-3 sentence summary of vendor landscape
+        - Output tables: Vendor Rankings, Normalized Quotes, Risk Summary
+        - Finish with a clear recommendation line (Top Vendor, rationale)
+        These instructions are advisory; current implementation builds tables procedurally.
+        """
+        instructions = (
+            "You are a vendor comparison analyst. Produce a concise summary and structured tables. "
+            "Follow this format:\n\n"
+            "Summary:\n<2-3 sentences describing vendor strengths and differentiation>\n\n"
+            "Vendor Rankings Table (Rank | Vendor | Score (0-5) | Total Price | Status)\n"
+            "Normalized Quotes Table (Vendor | Unit $ | Total $ | Lead Days | Score | Price | Delivery | Quality)\n"
+            "Risk Summary Table (Vendor | Risks) or 'No elevated risks detected.'\n\n"
+            "Recommendation: <Top Vendor> - <Reason>."
+        )
         super().__init__(
             name="Comparison & Analysis Agent",
             model="gpt-4o",

@@ -100,6 +100,18 @@ export const MessageList: React.FC<MessageListProps> = ({
           
           return (
             <React.Fragment key={message.id}>
+              {(() => {
+                if (message.role === 'assistant') {
+                  console.log('🔍 Rendering message:', {
+                    id: message.id,
+                    contentPreview: message.content.substring(0, 50),
+                    hasHumanGateActions: !!message.humanGateActions,
+                    humanGateActions: message.humanGateActions,
+                    metadata: message.metadata
+                  })
+                }
+                return null
+              })()}
               <MessageBubble message={message} />
               {/* Show trace panel after the last user message if traces exist */}
               {shouldShowTracesAfterThis && (

@@ -158,6 +158,9 @@ export const streamChat = async (
       ? `${config.apiBaseUrl}/workflows/${agentId}/chat`
       : `${config.apiBaseUrl}/agents/${agentId}/chat`
     
+    console.log('🔥🔥🔥 streamChat URL:', url)
+    console.log('🔥🔥🔥 agentId:', agentId, 'isWorkflow:', isWorkflow)
+    
     // Create AbortController with timeout for streaming requests
     // Workflows may take longer than regular agent requests
     const timeoutMs = isWorkflow ? 180000 : 60000 // 3 min for workflows, 1 min for agents
@@ -232,10 +235,26 @@ export const streamChat = async (
         try {
           const parsed = JSON.parse(eventData)
           
-          // Handle phase_complete events from RFQ workflow
+          // New structured RFQ phase blocks
+          if (eventType === 'agent_section') {
+            // Forward structured phase block to traceEventCallback for upstream handling
+            if (traceEventCallback) {
+              traceEventCallback({
+                type: 'agent_section',
+                phase: parsed.phase,
+                title: parsed.title,
+                markdown: parsed.markdown,
+                metrics: parsed.metrics,
+                data: parsed.data,
+                isPhaseMessage: parsed.isPhaseMessage ?? true,
+                subBlocks: parsed.subBlocks || [],
+              })
+            }
+            console.debug('Received agent_section:', parsed.phase)
+            continue
+          }
+          // Legacy phase_complete fallback
           if (eventType === 'phase_complete') {
-            // Phase complete event: create a new message for this phase
-            // Pass to trace event handler which we'll use for phases
             if (traceEventCallback) {
               traceEventCallback({
                 type: 'phase_complete',
@@ -244,7 +263,7 @@ export const streamChat = async (
                 data: parsed.data,
               })
             }
-            console.debug('Received phase complete:', parsed.phase)
+            console.debug('Received legacy phase_complete:', parsed.phase)
             continue
           }
           

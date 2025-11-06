@@ -245,6 +245,13 @@ class Thread(BaseModel):
     # Metadata
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
     
+    # Workflow state for approval workflows
+    workflow_state: Optional[Dict[str, Any]] = Field(
+        default=None,
+        alias="workflowState",
+        description="Workflow state for pause/resume functionality (e.g., approval requests)"
+    )
+    
     # Cosmos DB fields
     etag: Optional[str] = Field(default=None, description="Cosmos DB etag")
     

@@ -15,8 +15,9 @@ This orchestrator chains all individual phases into one cohesive workflow.
 """
 
 import asyncio
+from time import perf_counter
 from typing import Optional, Tuple, Any, Dict, AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.agents.workflows.rfq.models import (
     RFQRequest,
@@ -27,6 +28,7 @@ from src.agents.workflows.rfq.models import (
     NegotiationRecommendation,
     ApprovalGateResponse,
     ApprovalDecision,
+    ApprovalRequest,
     PurchaseOrder,
 )
 from src.agents.workflows.rfq.orchestrators.preprocessing_orchestrator import (
@@ -46,6 +48,13 @@ from src.agents.workflows.rfq.agents.negotiation_strategy_agent import (
 from src.agents.workflows.rfq.agents.human_gate_agent import HumanGateAgent
 from src.agents.workflows.rfq.agents.purchase_order_agent import PurchaseOrderAgent
 from src.agents.workflows.rfq.observability import rfq_logger
+from src.agents.workflows.rfq.rfq_section_builder import (
+    build_phase_block,
+    prune_phase_blocks,
+    build_comparison_markdown,
+    build_negotiation_sub_blocks,
+)
+from src.persistence.threads import get_thread_repository
 
 
 class RFQWorkflowOrchestrator:
@@ -64,8 +73,13 @@ class RFQWorkflowOrchestrator:
     observability at each phase transition.
     """
     
-    def __init__(self):
-        """Initialize the master orchestrator with all sub-components."""
+    def __init__(self, thread_id: Optional[str] = None, agent_id: str = "rfq-procurement"):
+        """Initialize the master orchestrator with all sub-components.
+
+        Args:
+            thread_id: Optional thread identifier for persistence
+            agent_id: Partition key for thread repository operations
+        """
         self.preprocessing_orchestrator = PreprocessingOrchestrator()
         self.parallel_evaluation_orchestrator = ParallelEvaluationOrchestrator()
         self.rfq_submission_executor = RFQSubmissionExecutor()
@@ -74,6 +88,10 @@ class RFQWorkflowOrchestrator:
         self.negotiation_agent = NegotiationStrategyAgent()
         self.human_gate_agent = HumanGateAgent()
         self.po_agent = PurchaseOrderAgent()
+        
+        # Store thread ID for workflow state persistence
+        self._thread_id = thread_id
+        self._agent_id = agent_id
         
         rfq_logger.info("RFQ Workflow Master Orchestrator initialized")
     
@@ -339,8 +357,7 @@ class RFQWorkflowOrchestrator:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Execute the complete RFQ workflow with detailed phase-by-phase streaming.
-        
-        Yields detailed messages after each phase completion with full results.
+        Emits structured phase blocks with metrics for collapsible UI sections.
         
         Args:
             rfq_request: Initial RFQ request from user
@@ -350,91 +367,140 @@ class RFQWorkflowOrchestrator:
             wait_for_human: If False, will auto-approve for testing
             
         Yields:
-            dict with phase results and formatted message
+            dict phase blocks `{type:'agent_section', phase, title, markdown, metrics, data}`
         """
         rfq_logger.info(
             f"Starting streaming RFQ workflow",
             extra={"workflow_id": workflow_id, "request_id": rfq_request.request_id},
         )
 
-    async def execute_full_workflow_streaming(
-        self,
-        rfq_request: RFQRequest,
-        workflow_id: str,
-        buyer_name: str = "Procurement Manager",
-        buyer_email: str = "procurement@company.com",
-        wait_for_human: bool = True,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Execute the complete RFQ workflow with detailed phase-by-phase streaming.
-        
-        Yields detailed messages after each phase completion with full results.
-        
-        Args:
-            rfq_request: Initial RFQ request from user
-            workflow_id: Unique workflow identifier
-            buyer_name: Name of the buyer/procurement manager
-            buyer_email: Email of the buyer
-            wait_for_human: If False, will auto-approve for testing
-            
-        Yields:
-            dict with phase results and formatted message
-        """
-        rfq_logger.info(
-            f"Starting streaming RFQ workflow",
-            extra={"workflow_id": workflow_id, "request_id": rfq_request.request_id},
-        )
-        
-        # =======================================================================
+        agent_pk = self._agent_id  # Partition key for thread operations
+        thread_repo = get_thread_repository()
+        thread = None
+        if self._thread_id:
+            try:
+                thread = await thread_repo.get(self._thread_id, agent_pk)
+            except Exception as e:
+                rfq_logger.warning(f"Thread fetch failed: {e}")
+
+        def persist_phase_block(block: Dict[str, Any]):
+            """Append phase block to thread metadata and prune (async wrapper)."""
+            async def _update():
+                nonlocal thread
+                if not self._thread_id:
+                    return
+                try:
+                    if not thread:
+                        thread_local = await thread_repo.get(self._thread_id, agent_pk)
+                    else:
+                        thread_local = thread
+                    if not thread_local:
+                        return
+                    if thread_local.metadata is None:
+                        thread_local.metadata = {}
+                    blocks = thread_local.metadata.get("rfq_phases", [])
+                    blocks.append(block)
+                    blocks = prune_phase_blocks(blocks, max_blocks=8)
+                    thread_local.metadata["rfq_phases"] = blocks
+                    await thread_repo.update(thread_local)
+                    thread = thread_local
+                except Exception as ex:
+                    rfq_logger.warning(f"Persist phase block failed: {ex}")
+            return _update()
+
+        async def emit_phase(
+            phase_key: str,
+            title: str,
+            markdown_sections: Any,
+            data: Dict[str, Any],
+            sub_blocks: Optional[Any] = None,
+        ):
+            start = perf_counter()
+            # Token usage currently unavailable for procedural phases → zeros
+            prompt_tokens = 0
+            completion_tokens = 0
+            total_tokens = 0
+            metrics = {
+                "duration_ms": 0,  # placeholder until end
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "estimated": False,
+            }
+            block = build_phase_block(
+                phase_id=phase_key,
+                title=title,
+                markdown_sections=markdown_sections,
+                metrics=metrics,
+                sub_blocks=sub_blocks,
+            )
+            # Update duration
+            block["metrics"]["duration_ms"] = int((perf_counter() - start) * 1000)
+            await persist_phase_block(block)
+            yield {
+                "type": "agent_section",
+                "phase": phase_key,
+                "title": block["title"],
+                "markdown": block["markdown"],
+                "metrics": block["metrics"],
+                "sub_blocks": block.get("sub_blocks", []),
+                "isPhaseMessage": True,
+                "data": data,
+            }
+
+        # ===================================================================
         # PHASE 2: PREPROCESSING
-        # =======================================================================
+        # ===================================================================
+        
         rfq_logger.info("Phase 2: Starting preprocessing", extra={"workflow_id": workflow_id})
         
         requirements, vendors = await self.preprocessing_orchestrator.preprocess(
             rfq_request=rfq_request,
             workflow_id=workflow_id,
         )
-        
-        # Build detailed Phase 2 message
-        phase2_message = f"""## Phase 2: Vendor Qualification Complete
-
-**Product Requirements:**
-- Product: {requirements.product_name}
-- Category: {requirements.category}
-- Quantity: {requirements.quantity:,} {requirements.unit}
-- Required Certifications: {', '.join(requirements.required_certifications)}"""
-        
-        # Add budget if available from original request
+        # Build markdown sections (summary + vendor list table)
+        req_lines = [
+            f"Product: {requirements.product_name}",
+            f"Category: {requirements.category}",
+            f"Quantity: {requirements.quantity:,} {requirements.unit}",
+            f"Required Certifications: {', '.join(requirements.required_certifications)}",
+        ]
         if rfq_request.budget_amount:
-            phase2_message += f"\n- Budget: ${rfq_request.budget_amount:,.2f}"
-        
-        # Add delivery date if available
+            req_lines.append(f"Budget: ${rfq_request.budget_amount:,.2f}")
         if requirements.desired_delivery_date:
-            phase2_message += f"\n- Delivery Date: {requirements.desired_delivery_date.strftime('%Y-%m-%d')}"
-        
-        phase2_message += f"\n\n**Qualified Vendors ({len(vendors)}):**\n"
-        
-        for i, vendor in enumerate(vendors, 1):
-            phase2_message += f"\n**{i}. {vendor.vendor_name}** (ID: {vendor.vendor_id})\n"
-            phase2_message += f"   - Rating: {vendor.overall_rating}/5.0\n"
-            phase2_message += f"   - Certifications: {', '.join(vendor.certifications) if vendor.certifications else 'None'}\n"
-            phase2_message += f"   - Lead Time: {vendor.estimated_lead_time_days} days\n"
-            phase2_message += f"   - Location: {vendor.country}\n"
-            if vendor.previous_orders > 0:
-                phase2_message += f"   - Previous Orders: {vendor.previous_orders}\n"
-        
-        yield {
-            "phase": "phase2_complete",
-            "message": phase2_message,
-            "data": {
+            req_lines.append(f"Delivery Date: {requirements.desired_delivery_date.strftime('%Y-%m-%d')}")
+        summary_body = "\n".join(f"- {l}" for l in req_lines)
+        vendor_rows = []
+        for v in vendors:
+            vendor_rows.append([
+                v.vendor_name,
+                v.overall_rating,
+                ", ".join(v.certifications) if v.certifications else "None",
+                v.estimated_lead_time_days,
+                v.country,
+            ])
+        from src.agents.workflows.rfq.rfq_section_builder import build_markdown_table
+        vendor_table = build_markdown_table(
+            ["Vendor", "Rating", "Certifications", "Lead Days", "Country"], vendor_rows
+        )
+        sections_phase2 = [
+            {"title": "Requirements", "body": summary_body},
+            {"title": "Qualified Vendors", "body": vendor_table},
+        ]
+        async for ev in emit_phase(
+            phase_key="phase2_complete",
+            title="Phase 2: Vendor Qualification Complete",
+            markdown_sections=sections_phase2,
+            data={
                 "requirements": requirements.model_dump(),
-                "vendors": [v.model_dump() for v in vendors]
-            }
-        }
+                "vendors": [v.model_dump() for v in vendors],
+            },
+        ):
+            yield ev
         
-        # =======================================================================
+        # ===================================================================
         # PHASE 3: PARALLEL ORCHESTRATION
-        # =======================================================================
+        # ===================================================================
         rfq_logger.info("Phase 3: Starting parallel evaluation", extra={"workflow_id": workflow_id})
         
         # 3.1: Submit RFQ to all vendors
@@ -459,62 +525,51 @@ class RFQWorkflowOrchestrator:
             quotes=parsed_quotes,
             workflow_id=workflow_id,
         )
-        
-        # Build detailed Phase 3 message
-        phase3_message = f"""## Phase 3: Parallel Evaluation Complete
-
-**Evaluation Summary:**
-Evaluated {len(parsed_quotes)} vendor quotes across 3 evaluation tracks:
-
-"""
-        
-        # Group track results by vendor
-        vendor_track_map = {}
-        for track in track_results:
-            if track.vendor_id not in vendor_track_map:
-                vendor_track_map[track.vendor_id] = {
-                    "vendor_name": track.vendor_name,
-                    "tracks": []
-                }
-            vendor_track_map[track.vendor_id]["tracks"].append(track)
-        
-        for vendor_id, vendor_data in vendor_track_map.items():
-            quote = next((q for q in parsed_quotes if q.vendor_id == vendor_id), None)
-            phase3_message += f"### {vendor_data['vendor_name']}\n"
-            if quote:
-                phase3_message += f"**Quote:** ${quote.unit_price:.2f}/unit (Total: ${quote.total_price:,.2f})\n\n"
-            
-            for track in vendor_data["tracks"]:
-                risk_emoji = "🟢" if track.risk_level == "low" else "🟡" if track.risk_level == "medium" else "🔴"
-                phase3_message += f"**{track.track_name}** {risk_emoji}\n"
-                phase3_message += f"- Score: {track.score}/100\n"
-                phase3_message += f"- Risk Level: {track.risk_level.upper()}\n"
-                phase3_message += f"- Recommendation: {track.recommendation}\n"
-                if track.details:
-                    phase3_message += f"- Details: {track.details}\n"
-                phase3_message += "\n"
-        
-        yield {
-            "phase": "phase3_complete",
-            "message": phase3_message,
-            "data": {
+        # Build summary sections
+        eval_summary = f"Evaluated {len(parsed_quotes)} vendor quotes across 3 evaluation tracks."\
+            if parsed_quotes else "No quotes parsed."
+        track_rows = []
+        for t in track_results:
+            track_rows.append([
+                t.vendor_name,
+                t.track_name,
+                t.score,
+                t.risk_level,
+                t.recommendation,
+            ])
+        track_table = build_markdown_table(
+            ["Vendor", "Track", "Score", "Risk", "Recommendation"], track_rows
+        )
+        sections_phase3 = [
+            {"title": "Evaluation Summary", "body": eval_summary},
+            {"title": "Track Results", "body": track_table},
+        ]
+        async for ev in emit_phase(
+            phase_key="phase3_complete",
+            title="Phase 3: Parallel Evaluation Complete",
+            markdown_sections=sections_phase3,
+            data={
                 "quotes": [q.model_dump() for q in parsed_quotes],
                 "evaluations": [e.model_dump() for e in vendor_evaluations],
-                "track_results": [{
-                    "track_name": t.track_name,
-                    "vendor_id": t.vendor_id,
-                    "vendor_name": t.vendor_name,
-                    "score": t.score,
-                    "recommendation": t.recommendation,
-                    "risk_level": t.risk_level,
-                    "details": t.details,
-                } for t in track_results]
-            }
-        }
+                "track_results": [
+                    {
+                        "track_name": t.track_name,
+                        "vendor_id": t.vendor_id,
+                        "vendor_name": t.vendor_name,
+                        "score": t.score,
+                        "recommendation": t.recommendation,
+                        "risk_level": t.risk_level,
+                        "details": t.details,
+                    }
+                    for t in track_results
+                ],
+            },
+        ):
+            yield ev
         
-        # =======================================================================
+        # ===================================================================
         # PHASE 4: COMPARISON & ANALYSIS
-        # =======================================================================
+        # ===================================================================
         rfq_logger.info("Phase 4: Starting comparison analysis", extra={"workflow_id": workflow_id})
         
         # Merge evaluation tracks
@@ -540,41 +595,18 @@ Evaluated {len(parsed_quotes)} vendor quotes across 3 evaluation tracks:
             workflow_id=workflow_id,
         )
         
-        # Build detailed Phase 4 message
-        phase4_message = f"""## Phase 4: Comparison Analysis Complete
-
-**Vendor Rankings:**
-
-"""
+        sections_phase4 = build_comparison_markdown(comparison_report)
+        async for ev in emit_phase(
+            phase_key="phase4_complete",
+            title="Phase 4: Comparison Analysis Complete",
+            markdown_sections=sections_phase4,
+            data={"comparison_report": comparison_report.model_dump()},
+        ):
+            yield ev
         
-        for i, ranked_vendor in enumerate(comparison_report.top_ranked_vendors, 1):
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**{i}.**"
-            vendor_name = ranked_vendor.get('vendor_name', 'Unknown')
-            score = ranked_vendor.get('score', 0)
-            total_price = ranked_vendor.get('total_price', 0)
-            recommendation = ranked_vendor.get('recommendation', '')
-            
-            phase4_message += f"{medal} **{vendor_name}**\n"
-            phase4_message += f"   - Score: {score:.1f}/5.0\n"
-            phase4_message += f"   - Total Price: ${total_price:,.2f}\n"
-            phase4_message += f"   - Status: {recommendation}\n"
-            phase4_message += "\n"
-        
-        # Add recommendations if available
-        if hasattr(comparison_report, 'recommendations') and comparison_report.recommendations:
-            phase4_message += f"**Analysis:**\n{comparison_report.recommendations}\n"
-        
-        yield {
-            "phase": "phase4_complete",
-            "message": phase4_message,
-            "data": {
-                "comparison_report": comparison_report.model_dump()
-            }
-        }
-        
-        # =======================================================================
+        # ===================================================================
         # PHASE 5: NEGOTIATION STRATEGY
-        # =======================================================================
+        # ===================================================================
         rfq_logger.info("Phase 5: Starting negotiation strategy", extra={"workflow_id": workflow_id})
         
         negotiation_recommendation = await self.negotiation_agent.generate_recommendation(
@@ -582,104 +614,122 @@ Evaluated {len(parsed_quotes)} vendor quotes across 3 evaluation tracks:
             quantity=requirements.quantity,
             workflow_id=workflow_id,
         )
+        sub_blocks_phase5 = build_negotiation_sub_blocks(
+            recommendation=negotiation_recommendation,
+            quantity=requirements.quantity,
+        )
+        sections_phase5 = [
+            {"title": "Target Vendor", "body": negotiation_recommendation.vendor_name},
+        ]
+        async for ev in emit_phase(
+            phase_key="phase5_complete",
+            title="Phase 5: Negotiation Strategy",
+            markdown_sections=sections_phase5,
+            data={"negotiation_recommendation": negotiation_recommendation.model_dump()},
+            sub_blocks=sub_blocks_phase5,
+        ):
+            yield ev
         
-        # Build detailed Phase 5 message with FULL negotiation strategy
-        phase5_message = f"""## Phase 5: Negotiation Strategy
-
-**Target Vendor:** {negotiation_recommendation.vendor_name}
-
-**Negotiation Strategy:**
-
-{negotiation_recommendation.negotiation_strategy}
-
-**Expected Outcome:**
-
-{negotiation_recommendation.expected_outcome}
-"""
-        
-        # Add suggested pricing if available
-        if negotiation_recommendation.suggested_unit_price:
-            phase5_message += f"\n**Pricing Recommendation:**\n"
-            phase5_message += f"- Suggested Unit Price: ${negotiation_recommendation.suggested_unit_price:.2f}\n"
-            phase5_message += f"- Total for {requirements.quantity:,} units: ${negotiation_recommendation.suggested_unit_price * requirements.quantity:,.2f}\n"
-        
-        # Add leverage points
-        if negotiation_recommendation.leverage_points:
-            phase5_message += f"\n**Leverage Points:**\n"
-            for i, point in enumerate(negotiation_recommendation.leverage_points, 1):
-                phase5_message += f"{i}. {point}\n"
-        
-        # Add fallback options
-        if negotiation_recommendation.fallback_options:
-            phase5_message += f"\n**Fallback Options:**\n"
-            for i, option in enumerate(negotiation_recommendation.fallback_options, 1):
-                phase5_message += f"{i}. {option}\n"
-        
-        yield {
-            "phase": "phase5_complete",
-            "message": phase5_message,
-            "data": {
-                "negotiation_recommendation": negotiation_recommendation.model_dump()
-            }
-        }
-        
-        # =======================================================================
+        # ===================================================================
         # PHASE 6: HUMAN GATE (APPROVAL)
-        # =======================================================================
+        # ===================================================================
         rfq_logger.info("Phase 6: Requesting human approval", extra={"workflow_id": workflow_id})
         
         human_gate_response = await self.human_gate_agent.request_human_input(
             recommendation=negotiation_recommendation
         )
         
+        # Create approval request for human decision
+        approval_request = ApprovalRequest(
+            request_id=workflow_id,
+            comparison_report=comparison_report,
+            negotiation_recommendations=[negotiation_recommendation] if negotiation_recommendation else None,
+            # Derive recommended vendor from top_ranked_vendors (first entry is best)
+            recommended_vendor_id=(
+                comparison_report.top_ranked_vendors[0].get("vendor_id")
+                if comparison_report and comparison_report.top_ranked_vendors
+                else None
+            ),
+            recommended_vendor_name=(
+                comparison_report.top_ranked_vendors[0].get("vendor_name")
+                if comparison_report and comparison_report.top_ranked_vendors
+                else None
+            ),
+            decision_required_by=datetime.utcnow() + timedelta(hours=24),
+        )
+        
+        # Save workflow state to thread for resumption (reuse existing thread_repo)
+        if hasattr(self, '_thread_id') and self._thread_id:
+            thread = await thread_repo.get(self._thread_id, "rfq-procurement")
+            if thread:
+                thread.workflow_state = {
+                    "approval_request": approval_request.model_dump(),
+                    "phase": "phase6_approval",
+                    "comparison_report": comparison_report.model_dump() if comparison_report else None,
+                    "negotiation_recommendation": negotiation_recommendation.model_dump() if negotiation_recommendation else None,
+                    "requirements": requirements.model_dump(),
+                    "buyer_name": buyer_name,
+                    "buyer_email": buyer_email,
+                    "workflow_id": workflow_id
+                }
+                await thread_repo.update(thread)
+        
         if not wait_for_human:
-            # Auto-approve for testing
             approval = ApprovalGateResponse(
                 request_id=workflow_id,
                 decision=ApprovalDecision.APPROVED,
                 decision_maker=buyer_name,
             )
-            
-            phase6_message = f"""## Phase 6: Approval
-
-✅ **Auto-Approved** (demonstration mode)
-
-**Approved By:** {buyer_name}
-**Decision:** Proceed with purchase order"""
-            
-            if negotiation_recommendation.suggested_unit_price:
-                phase6_message += f"\n**Approved Amount:** ${negotiation_recommendation.suggested_unit_price * requirements.quantity:,.2f}"
-            
-            phase6_message += "\n"
+            sections_phase6 = [
+                {"title": "Approval", "body": f"Auto-Approved by {buyer_name}. Decision: Proceed."},
+            ]
+            async for ev in emit_phase(
+                phase_key="phase6_complete",
+                title="Phase 6: Approval",
+                markdown_sections=sections_phase6,
+                data={"approval": approval.model_dump()},
+            ):
+                yield ev
         else:
-            phase6_message = f"""## Phase 6: Awaiting Human Approval
-
-⏳ **Approval Required**
-
-Please review the negotiation recommendation and approve or reject the purchase.
-"""
-            
-            yield {
-                "phase": "phase6_awaiting",
-                "message": phase6_message,
-                "data": {
-                    "human_gate_request": human_gate_response,
-                    "status": "awaiting_approval"
+            # Fetch the top vendor's normalized quote for display if available
+            top_vendor_id = (
+                comparison_report.top_ranked_vendors[0].get("vendor_id")
+                if comparison_report and comparison_report.top_ranked_vendors
+                else None
+            )
+            recommended_vendor = None
+            if comparison_report and top_vendor_id:
+                recommended_vendor = next(
+                    (q for q in comparison_report.normalized_quotes if q.vendor_id == top_vendor_id),
+                    None,
+                )
+            total_cost = (
+                (negotiation_recommendation.suggested_unit_price or 0) * requirements.quantity
+                if negotiation_recommendation
+                else 0
+            )
+            sections_phase6_wait = [
+                {
+                    "title": "Approval Required",
+                    "body": f"Recommended Vendor: {recommended_vendor.vendor_name if recommended_vendor else 'N/A'}\nTotal Cost: ${total_cost:,.2f}",
                 }
-            }
+            ]
+            async for ev in emit_phase(
+                phase_key="phase6_awaiting",
+                title="Phase 6: Approval Required",
+                markdown_sections=sections_phase6_wait,
+                data={
+                    "approval_request": approval_request.model_dump(),
+                    "status": "awaiting_approval",
+                    "human_gate_actions": True,
+                },
+            ):
+                yield ev
             return
         
-        yield {
-            "phase": "phase6_complete",
-            "message": phase6_message,
-            "data": {
-                "approval": approval.model_dump()
-            }
-        }
-        
-        # =======================================================================
+        # ===================================================================
         # PHASE 7: PURCHASE ORDER GENERATION
-        # =======================================================================
+        # ===================================================================
         rfq_logger.info("Phase 7: Generating purchase order", extra={"workflow_id": workflow_id})
         
         target_vendor = next(
@@ -701,48 +751,36 @@ Please review the negotiation recommendation and approve or reject the purchase.
             purchase_order=purchase_order,
         )
         
-        # Build detailed Phase 7 message
-        phase7_message = f"""## Phase 7: Purchase Order Issued
-
-✅ **Purchase Order Created Successfully**
-
-**PO Number:** {issued_po.po_number}
-**Status:** {issued_po.status.upper()}
-
-**Vendor Information:**
-- Name: {issued_po.vendor_name}
-- Contact: {issued_po.vendor_contact}
-
-**Order Details:**
-- Product: {issued_po.product_name}
-- Quantity: {issued_po.quantity:,} {issued_po.unit}
-- Unit Price: ${issued_po.unit_price:.2f}
-- **Total Amount: ${issued_po.total_amount:,.2f}**
-
-**Delivery:**
-- Expected Date: {issued_po.delivery_date.strftime('%Y-%m-%d')}
-
-**Payment:**
-- Terms: {issued_po.payment_terms}
-
-**Buyer:**
-- Name: {issued_po.buyer_name}
-- Email: {issued_po.buyer_email}
-
----
-
-🎉 **RFQ Procurement Workflow Complete!**
-"""
-        
-        yield {
-            "phase": "phase7_complete",
-            "message": phase7_message,
-            "data": {
+        sections_phase7 = [
+            {"title": "Purchase Order", "body": f"PO Number: {issued_po.po_number}\nStatus: {issued_po.status.upper()}"},
+            {
+                "title": "Order Details",
+                "body": (
+                    f"Product: {issued_po.product_name}\n"
+                    f"Quantity: {issued_po.quantity:,} {issued_po.unit}\n"
+                    f"Unit Price: ${issued_po.unit_price:.2f}\n"
+                    f"Total Amount: ${issued_po.total_amount:,.2f}"
+                ),
+            },
+            {
+                "title": "Delivery & Payment",
+                "body": (
+                    f"Delivery Date: {issued_po.delivery_date.strftime('%Y-%m-%d')}\n"
+                    f"Payment Terms: {issued_po.payment_terms}"
+                ),
+            },
+        ]
+        async for ev in emit_phase(
+            phase_key="phase7_complete",
+            title="Phase 7: Purchase Order Issued",
+            markdown_sections=sections_phase7,
+            data={
                 "purchase_order": issued_po.model_dump(),
                 "status": "completed",
-                "completed_at": datetime.now().isoformat()
-            }
-        }
+                "completed_at": datetime.now().isoformat(),
+            },
+        ):
+            yield ev
         
         rfq_logger.info(
             f"RFQ Workflow complete: PO {issued_po.po_number} issued successfully",
